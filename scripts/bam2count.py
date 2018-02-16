@@ -8,6 +8,7 @@ from cPickle import load
 from math import isnan
 from pytadbit.parsers.hic_bam_parser import get_biases_region,_iter_matrix_frags,printime,get_matrix,write_matrix,read_bam, filters_to_bin
 from pytadbit.utils.extraviews    import nicer
+from pytadbit.utils.file_handling import mkdir
 from StringIO                     import StringIO
 import os
 import glob
@@ -49,7 +50,7 @@ def write_matrix(inbam, resolution, biases, outdir,
         printime('  - Writing matrices')
 
     fnam = outdir + '{}_bam_{}kb.tsv'.format(region1, resolution / 1000)
-
+    mkdir (outdir)
     out = open(os.path.join(outdir, fnam), 'w')
 
     # pull all sub-matrices and write full matrix
