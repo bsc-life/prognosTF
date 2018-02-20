@@ -25,7 +25,7 @@ def binning_bed(peak_file, resolution, windows_span, max_dist, outdir,
         c, p1, p2 = line.split()[:3]
         return c, (int(p1) + int(p2)) / 2 / resolution, ''
 
-    peaks = open(peak_file,"r")
+    peaks = open(peak_file, "r")
 
     # findout if bed file contain features, or only coordinates
     line = peaks.next()
@@ -67,7 +67,6 @@ def binning_bed(peak_file, resolution, windows_span, max_dist, outdir,
                    (f1, f2), []).append((chromosome1, bs1, chromosome2, bs2))
 
     # define categories and write pairs
-    adding = windows_span / resolution
     for beg, end in intervals:
         print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Writing interval: ', beg, end
         for f1, f2 in intervals[(beg, end)]:
@@ -75,8 +74,8 @@ def binning_bed(peak_file, resolution, windows_span, max_dist, outdir,
             w = open(path.join(outdir, '%s_%d_%d_%s.tsv' % (
                 name, beg * resolution, end * resolution, extra)), 'w')
             for c1, s1, c2, s2 in intervals[(beg, end)][(f1, f2)]:
-                start1, end1 = s1 - adding, s1 + adding
-                start2, end2 = s2 - adding, s2 + adding
+                start1, end1 = s1 - windows_span, s1 + windows_span
+                start2, end2 = s2 - windows_span, s2 + windows_span
                 # check chromosome length
                 new_start1, new_end1 = start1 * resolution, end1 * resolution
                 new_start2, new_end2 = start2 * resolution, end2 * resolution
@@ -101,19 +100,22 @@ def main():
     windows = [[int(x) / resolution for x in win.split('-')] for win in windows]
 
     ## peaks file sorted per chromosome
-    bamfile = AlignmentFile(inbam,'rb')
-    sections = OrderedDict(zip(bamfile.references,[x / resolution + 1 for x in bamfile.lengths]))
+    bamfile = AlignmentFile(inbam, 'rb')
+    sections = OrderedDict(zip(bamfile.references, [x / resolution + 1
+                                                    for x in bamfile.lengths]))
     total = 0
     section_pos = dict()
     for crm in sections:
         section_pos[crm] = (total, total + sections[crm])
         total += sections[crm]
 
-    chrom_sizes = OrderedDict(zip(bamfile.references, [x for x in bamfile.lengths]))
+    chrom_sizes = OrderedDict(zip(bamfile.references,
+                                  [x for x in bamfile.lengths]))
 
-    binning_bed(peak_file, resolution, windows_span, max_dist, outdir, name, chrom_sizes, windows)
+    binning_bed(peak_file, resolution, windows_span, max_dist, outdir, name,
+                chrom_sizes, windows)
 
-    print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Sublists written!'
+    print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Sublists written!'
 
 
 def get_options():
@@ -127,28 +129,32 @@ def get_options():
                '15000000-20000000',
                '20000000-30000000')
 
-    parser.add_argument('-i','--peak', dest='peak_file',required=True, default=False,
-                        help='''Pairwise peaks to compute average submatrix (norm and raw)''')
-    parser.add_argument('-bam','--bam',dest='inbam',required=True, default=False,
-                        help= 'Input HiC-BAM file')
-    parser.add_argument('-r', '--resolution', dest='resolution', required=True, default=False,
-                        type=int, help='wanted resolution from generated matrix')
-    parser.add_argument('-o','--outdir',dest='outdir', default=True, help='output directory')
-    parser.add_argument('-n','--name',dest='name',default='pairs',
+    parser.add_argument('-i','--peak', dest='peak_file', required=True,
+                        metavar='PATH', help='''Pairwise peaks to compute average submatrix
+                        (norm and raw)''')
+    parser.add_argument('-b','--bam', dest='inbam', required=True,
+                        metavar='PATH', help= 'Input HiC-BAM file')
+    parser.add_argument('-r', '--resolution', dest='resolution', required=True,
+                        metavar='INT', default=False, type=int,
+                        help='wanted resolution from generated matrix')
+    parser.add_argument('-o', '--outdir', dest='outdir', default='',
+                        metavar='PATH', help='output directory')
+    parser.add_argument('-n', '--name', dest='name', default='pairs',
                         help='[%(default)s] Output name prefix')
-    parser.add_argument('-s', dest='windows_span',required=True, default=False,type=int,
+    parser.add_argument('-s', dest='windows_span',required=True, type=int,
+                        metavar='INT',
                         help='''Windows span around center of the peak (Total
                         windows size is 2 times windows-span + 1)''')
-    parser.add_argument('-m','--max_dist', dest='max_dist',required=True, default=False,type=int,
-                        help='''Max dist between center peaks''')
-    parser.add_argument('-w','--windows', dest='windows',required=False,
+    parser.add_argument('-m','--max_dist', dest='max_dist', metavar='INT',
+                        default=float('inf'), type=int,
+                        help='''[%(default)s] Max dist between center peaks''')
+    parser.add_argument('-w','--windows', dest='windows', required=False,
                         default=windows, metavar='INT-INT', type=str,nargs="+",
                         help='''[%(default)s] If only interested in some intervals to check:
                         -w 1000000-2000000 2000000-5000000" correspond to 2 window intervals,
                         one from 1Mb to 2Mb and one from 2Mb to 5Mb.''')
 
     opts = parser.parse_args()
-
     return opts
 
 if __name__=='__main__':
