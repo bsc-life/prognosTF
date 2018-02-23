@@ -52,8 +52,8 @@ def binning_bed(peak_file, resolution, windows_span, max_dist, outdir,
     wsp = (windows_span * 2) + 1
     mdr = max_dist / resolution
 
-    pairs = ((a, b) for a, b in combinations(bin_coordinate, 2) if a[0] == b[0]
-             and wsp <= abs(b[1] - a[1]) <= mdr)
+    pairs = ((a, b) for a, b in combinations(bin_coordinate, 2)
+             if a[0] == b[0] and wsp <= abs(b[1] - a[1]) <= mdr)
 
     print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '- Writing list of coordinates...'
 
@@ -80,7 +80,7 @@ def binning_bed(peak_file, resolution, windows_span, max_dist, outdir,
                 new_start1, new_end1 = start1 * resolution, end1 * resolution
                 new_start2, new_end2 = start2 * resolution, end2 * resolution
                 if new_end1 <= chrom_sizes[c1] and new_end2 <= chrom_sizes[c1]:
-                    w.write('%s:%d-%d\t%s:%d-%d\n' % (
+                    w.write('%s\t%d\t%d\t%s\t%d\t%d\n' % (
                        c1, new_start1, new_end1, c2, new_start2, new_end2))
             w.close()
 

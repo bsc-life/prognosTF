@@ -77,7 +77,7 @@ def sort_BAMtsv(outdir,resolution):
     for tsv in all_tsv:
         print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Sorting BAM matrix: ', tsv
         # sort file first and second column and write to same file
-        fh = subprocess.Popen("sort -k1n -k2n "+ tsv+ " -o "+ tsv, shell=True)
+        fh = subprocess.Popen("sort -k1n -k2n -S 20% "+ tsv+ " -o "+ tsv, shell=True)
         fh.communicate()
 
 def main():
