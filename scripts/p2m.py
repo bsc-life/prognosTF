@@ -102,75 +102,6 @@ def mean_metamatrix(avg_raw, avg_nrm, avg_pass, outdir, label):
     # if want to plot wait until all finishes (same colorbarscale)
 
 
-def readfiles_mult(file1, peaks):
-    def split_line1(l):
-        a, b, c, d = l.split()
-        return (int(a), int(b)), c, d
-    def split_line2(l):
-        a, b, c, d = map(int, l.split())
-        return (a, b), c, d
-    avg_raw  = {}
-    avg_nrm  = {}
-    avg_pass = {}
-    for peak in peaks:    
-        avg_raw [peak] = defaultdict(int)
-        avg_nrm [peak] = defaultdict(float)
-        avg_pass[peak] = defaultdict(int)
-    print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ' - Reading BAM and peaks...'
-    fh1 = open(file1)
-    pos1, raw, nrm = split_line1(fh1.next())
-    files2 = dict((f, open(peaks[f]['sorted_path'])) for f in peaks)
-    status2 = [(files2[f], f, n, split_line2(files2[f].next())) 
-               for n, f in enumerate(peaks)]
-    while True:
-        for fh2, peak, n, (pos2, x, y) in status2:
-            if pos2 > pos1:
-                try:
-                    pos1, raw, nrm = split_line1(fh1.next())
-                except StopIteration:
-                    break
-            elif pos1 == pos2:
-                avg_raw[peak][x,y] += int(raw)
-                avg_nrm[peak][x,y] += float(nrm)
-                avg_pass[peak][x,y] += 1
-                pos2_ = pos2
-                try:
-                    pos2, x, y = split_line2(fh2.next())
-                    status2[n] = (fh2, peak, n, (pos2, x, y))
-                except StopIteration:
-                    status2.remove((fh2, peak, n, (pos2, x, y)))
-                    status2 = [tuple(list(status2[n][:2]) + [n] + [status2[n][3]])
-                               for n in range(len(status2))]
-                    fh2.close()
-                    if not status2:
-                        break
-                if pos2_ != pos2:  # some cells in the peak file are repeated
-                    try:
-                        pos1, raw, nrm = split_line1(fh1.next())
-                    except StopIteration:
-                        break
-            else:
-                avg_pass[peak][x,y] += 1
-                try:
-                    pos2, x, y = split_line2(fh2.next())
-                    status2[n] = (fh2, peak, n, (pos2, x, y))
-                except StopIteration:
-                    status2.remove((fh2, peak, n, (pos2, x, y)))
-                    status2 = [tuple(list(status2[n][:2]) + [n] + [status2[n][3]])
-                               for n in range(len(status2))]
-                    fh2.close()
-                    if not status2:
-                        break
-        else:
-            continue
-        break
-    fh1.close()
-    for fh2, _. _, _ in status2:
-        fh2.close()  
-    print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),' - Finished extracting'
-    return avg_raw, avg_nrm, avg_pass
-
-
 def main():
     opts = get_options()
 
@@ -180,13 +111,16 @@ def main():
     outdir       = opts.outdir
     ncpus        = opts.ncpus
     biases       = opts.biases
-    mats         = opts.mats
+    genomic_mat  = opts.genomic_mat
     inbam        = opts.inbam
 
     badcols = load(open(biases))['badcol']
 
-    mkdir(tmpdir)
+    if not tmpdir:
+        tmpdir = os.path.join(outdir, 'tmp')
+
     mkdir(outdir)
+    mkdir(tmpdir)
 
     ## peaks file sorted per chromosome
     bamfile  = AlignmentFile(inbam, 'rb')
@@ -243,44 +177,16 @@ def main():
         avg_nrm [peak] = defaultdict(float)
         avg_pass[peak] = defaultdict(int)
     
-    do_multi = False
-
-    if do_multi:
-        pool = mu.Pool(ncpus)
-        procs = {}
-        for peak in peaks:
-            procs[peak] = pool.apply_async(readfiles, (mats, peaks[peak]['sorted_path']))
-        pool.close()
-        pool.join()
-    else:
-        nfiles = len(peaks) / ncpus + 1
-        pool = mu.Pool(ncpus)
-        procs = {}
-        peak_keys = peaks.keys()
-        for p in range(0, len(peak_keys), nfiles):
-            sub_peaks = dict((peak_keys[peak], peaks[peak_keys[peak]]) 
-                             for peak in range(p, min(p + nfiles, len(peak_keys))))
-            # readfiles_mult(mats, sub_peaks)
-            procs[p] = pool.apply_async(readfiles_mult, (mats, sub_peaks))
-        pool.close()
-        pool.join()
-
-        avgs_raw  = {}
-        avgs_nrm  = {}
-        avgs_pass = {}
-        for p in procs:
-            avg_raw, avg_nrm, avg_pass = procs[p].get()
-            avgs_raw.update(avg_raw)
-            avgs_nrm.update(avg_nrm)
-            avgs_pass.update(avg_pass)
-        # avgs_raw, avgs_nrm, avgs_pass = readfiles_mult(mats, peaks)
+    pool = mu.Pool(ncpus)
+    procs = {}
+    for peak in peaks:
+        procs[peak] = pool.apply_async(readfiles, (genomic_mat, peaks[peak]['sorted_path']))
+    pool.close()
+    pool.join()
 
     # save meta-waffles
     for peak in peaks:
-        if do_multi:
-           avg_raw, avg_nrm, avg_pass = procs[peak].get()
-        else:
-           avg_raw, avg_nrm, avg_pass = avgs_raw[peak], avgs_nrm[peak], avgs_pass[peak]
+        avg_raw, avg_nrm, avg_pass = procs[peak].get()
 
         if avg_pass:
             mean_metamatrix(avg_raw, avg_nrm, avg_pass, outdir, peak) # get mean matrix, raw and norm divided passages
@@ -303,21 +209,26 @@ def main():
 
 
 def get_options():
-    parser = ArgumentParser(usage="-i Peaks -r INT [options]")
+    parser = ArgumentParser()
 
-    parser.add_argument('-i','--peak', dest='peak_file',required=True, default=False,
+    parser.add_argument('-i', '--peak', dest='peak_file',required=True, default=False,
                         help='''Pairwise peaks to compute average submatrix (norm and raw)''')
-    parser.add_argument('-bam','--bam',dest='inbam',required=True, default=False,
+    parser.add_argument('-o', '--outdir',dest='outdir',required=True, 
+                        metavar='PATH', help='output directory')
+    parser.add_argument('-bam', '--bam',dest='inbam',required=True, default=False,
                         help= 'Input HiC-BAM file')
+    parser.add_argument('-b', '--biases',dest='biases',default=True, help = 'Biases', 
+                        required=True)
+    parser.add_argument('-m', '--genomic_mat', dest='genomic_mat',default=True, 
+                        metavar='GENOMIC_MATRIX', required=True,
+                        help = '''Path to genomic matrix in 3 columns format 
+                        (should be sorted with `sort -k1,2n`)''')
     parser.add_argument('-r', '--resolution', dest='resolution', required=True, default=False,
                         type=int, help='wanted resolution from generated matrix')
-    parser.add_argument('-t','--tmp',dest='tmpdir',required=True, default=False,
+    parser.add_argument('-t', '--tmp',dest='tmpdir', default=None,
                         help='Tmpdir to store coordinates files')
-    parser.add_argument('-o','--outdir',dest='outdir',default=True,help='output directory')
-    parser.add_argument('-C','--cpus',dest='ncpus',type=int,default=8,
+    parser.add_argument('-C', '--cpus',dest='ncpus',type=int, default=8,
                         help='''[%(default)s] number of cpus to be used for parsing the HiC-BAM file''')
-    parser.add_argument('-b','--biases',dest='biases',default=True, help = 'Biases')
-    parser.add_argument('-mats','--mats',dest='mats',default=True, help = 'Folder where matrices are located')
 
     opts = parser.parse_args()
 
