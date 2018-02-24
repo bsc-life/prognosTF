@@ -22,11 +22,12 @@ def mkdir(dnam):
         if exc.errno != errno.EEXIST or not os.path.isdir(dnam):
             raise
 
-def extract_coordinates(peak_fname, resolution, section_pos, tmpdir, badcols):
+def extract_coordinates(peak_fname, tmp_fname, resolution, section_pos,
+                        tmpdir, badcols):
     '''Chunk file into multiple, and write them in parallel per file write coord of 10,000 peak pairs
     Write a dictionary depending of pairs of peak per target'''
     peak_tmp_fname = os.path.split(peak_fname)[-1]
-    out = open(os.path.join(tmpdir, peak_tmp_fname + '_tmp'), 'w')
+    out = open(tmp_fname, 'w')
     for line in open(peak_fname):
         chr1, beg1, end1, chr2, beg2, end2 = line.split()
         beg1, end1, beg2, end2 = int(beg1), int(end1), int(beg2), int(end2)
@@ -57,9 +58,13 @@ def readfiles(file1, file2):
     def split_line2(l):
         a, b, c, d = map(int, l.split())
         return (a, b), c, d
-    avg_raw  = defaultdict(int)
-    avg_nrm  = defaultdict(float)
-    avg_pass = defaultdict(int)
+
+    # create empty meta-waffles
+    sum_raw = defaultdict(int)
+    sqr_raw = defaultdict(int)
+    sum_nrm = defaultdict(float)
+    sqr_nrm = defaultdict(float)
+    passage = defaultdict(int)
     print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ' - Reading BAM and peaks from %s...' % file2
     fh1 = open(file1)
     fh2 = open(file2)
@@ -70,36 +75,46 @@ def readfiles(file1, file2):
             if pos2 > pos1:
                 pos1, raw, nrm = split_line1(fh1.next())
             elif pos1 == pos2:
-                avg_raw[x,y] += int(raw)
-                avg_nrm[x,y] += float(nrm)
-                avg_pass[x,y] += 1
+                raw = int(raw)
+                nrm = float(nrm)
+                sum_raw[x, y] += raw
+                sum_nrm[x, y] += nrm
+                sqr_raw[x, y] += raw**2
+                sqr_nrm[x, y] += nrm**2
+                passage[x, y] += 1
                 pos2_ = pos2
                 pos2, x, y = split_line2(fh2.next())
                 if pos2_ != pos2:  # some cells in the peak file are repeated
                     pos1, raw, nrm = split_line1(fh1.next())
             else:
-                avg_pass[x,y] += 1
+                passage[x, y] += 1
                 pos2, x, y = split_line2(fh2.next())
     except StopIteration:
         fh1.close()
         fh2.close()
     print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),' - Finished extracting %s' % file2
-    return avg_raw, avg_nrm, avg_pass
+    return sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage
 
 
-def mean_metamatrix(avg_raw, avg_nrm, avg_pass, outdir, label):
-    '''To obtain the mean matrix, divide raw and norm per passages, plot if wanted'''
-    size = max(avg_pass.keys())[0] + 1
+def mean_metamatrix(sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage, outdir, label):
+    '''To obtain the mean matrix, divide raw and norm per pasages, plot if wanted'''
+    size = max(passage.keys())[0] + 1
 
-    array_raw = np.zeros((size, size))
-    array_nrm = np.zeros((size, size))
-    for x in avg_raw.keys():
-        array_raw[x] = float(avg_raw[x]) / float(avg_pass[x])
-        array_nrm[x] = float(avg_nrm[x]) / float(avg_pass[x])
+    array_avg_raw = np.zeros((size, size))
+    array_avg_nrm = np.zeros((size, size))
+    array_std_raw = np.zeros((size, size))
+    array_std_nrm = np.zeros((size, size))
+    for x in sum_raw:
+        N = float(passage[x])
+        array_avg_raw[x] = sum_raw[x] / N
+        array_avg_nrm[x] = sum_nrm[x] / N
+        array_std_raw[x] = (sqr_raw[x] / N - (sum_raw[x] / N)**2)**0.5
+        array_std_nrm[x] = (sqr_nrm[x] / N - (sum_nrm[x] / N)**2)**0.5
 
-    np.savetxt(os.path.join(outdir, 'mean_raw_' + label + '.txt'), array_raw)
-    np.savetxt(os.path.join(outdir, 'mean_nrm_' + label + '.txt'), array_nrm)
-    # if want to plot wait until all finishes (same colorbarscale)
+    np.savetxt(os.path.join(outdir, 'mean_raw_' + label + '.txt'), array_avg_raw)
+    np.savetxt(os.path.join(outdir, 'mean_nrm_' + label + '.txt'), array_avg_nrm)
+    np.savetxt(os.path.join(outdir, 'stdv_raw_' + label + '.txt'), array_std_raw)
+    np.savetxt(os.path.join(outdir, 'stdv_nrm_' + label + '.txt'), array_std_nrm)
 
 
 def main():
@@ -122,9 +137,10 @@ def main():
     mkdir(outdir)
     mkdir(tmpdir)
 
-    ## peaks file sorted per chromosome
+    # get chromosome lengths
     bamfile  = AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references,[x / resolution + 1 for x in bamfile.lengths]))
+    sections = OrderedDict(zip(bamfile.references, 
+                               [x / resolution + 1 for x in bamfile.lengths]))
     total = 0
     section_pos = dict()
     for crm in sections:
@@ -135,77 +151,67 @@ def main():
     sublists = glob.glob(os.path.join(peak_file, '*'))
     peaks = {}
     for sublist in sublists:
-        peaks[os.path.split(sublist)[-1]] = {'ori_path': sublist}
+        peak_fname = os.path.split(sublist)[-1]
+        peaks[os.path.split(sublist)[-1]] = {
+            'ori_path': sublist,
+            'tmp_path': os.path.join(tmpdir, peak_fname + '_tmp')}
 
     # extract all sublists of peaks
     pool = mu.Pool(ncpus)
     for peak in peaks:
         pool.apply_async(extract_coordinates, 
-                         args=(peaks[peak]['ori_path'], resolution, 
-                         section_pos, tmpdir, badcols))
+                         args=(peaks[peak]['ori_path'], peaks[peak]['tmp_path'],
+                         resolution, section_pos, tmpdir, badcols))
     pool.close()
     pool.join()
 
     # sort all sublists of peaks
     procs = []
     for peak in peaks:
-        peaks[peak]['tmp_path'] = os.path.join(tmpdir, peak + '_tmp')
         peaks[peak]['sorted_path'] = peaks[peak]['tmp_path'] + '_sorted'
         procs.append(subprocess.Popen(("sort -k1,2n -S 20% --parallel={0} {1} "
                                        "--temporary-directory={2} > {3}").format(
-                opts.ncpus, peaks[peak]['tmp_path'], tmpdir, 
+                opts.ncpus, peaks[peak]['tmp_path'], tmpdir,
                 peaks[peak]['sorted_path']), shell=True))
     while procs:
         for p in procs:
-            if p.poll() is None:
-                continue
             if p.poll() == 0:
                 procs.remove(p)
-            else:
-                print p.communicate()
-                raise Exception('ERROR: problem with sorting\n')
+            elif p.poll() is not None:
+                raise Exception('ERROR: problem sorting: %s' % p.communicate())
         sleep(0.1)
-    for peak in peaks:
-        os.system('rm -f ' + peaks[peak]['tmp_path'])
 
     # extract submatrices
-    avg_raw  = {}
-    avg_nrm  = {}
-    avg_pass = {}
-    for peak in peaks:
-        avg_raw [peak] = defaultdict(int)
-        avg_nrm [peak] = defaultdict(float)
-        avg_pass[peak] = defaultdict(int)
-    
     pool = mu.Pool(ncpus)
     procs = {}
     for peak in peaks:
-        procs[peak] = pool.apply_async(readfiles, (genomic_mat, peaks[peak]['sorted_path']))
+        procs[peak] = pool.apply_async(readfiles, (genomic_mat, 
+                                                   peaks[peak]['sorted_path']))
     pool.close()
     pool.join()
-
-    # save meta-waffles
-    for peak in peaks:
-        avg_raw, avg_nrm, avg_pass = procs[peak].get()
-
-        if avg_pass:
-            mean_metamatrix(avg_raw, avg_nrm, avg_pass, outdir, peak) # get mean matrix, raw and norm divided passages
-            out_raw = open(os.path.join(outdir, 'raw_%s.pickle' % (peak)),'wb')
-            out_nrm = open(os.path.join(outdir, 'nrm_%s.pickle' % (peak)),'wb')
-            out_pas = open(os.path.join(outdir, 'pass_%s.pickle' % (peak)),'wb')
-            dump(avg_raw,out_raw)
-            dump(avg_nrm,out_nrm)
-            dump(avg_pass,out_pas)
-            out_raw.close()
-            out_nrm.close()
-            out_pas.close()
-        else:
-            print 'No information at this interval: ', peak
 
     # clean
     for peak in peaks:
         os.system('rm -f '  + peaks[peak]['tmp_path'])
-        os.system('rm -rf ' + tmpdir)
+    os.system('rm -rf ' + tmpdir)
+
+    # save meta-waffles
+    for peak in peaks:
+        sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage = procs[peak].get()
+        if passage:
+            print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ' - Generating meta-waffle %s...' % peak
+            # get mean matrix, raw and norm divided pasages
+            mean_metamatrix(sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage, outdir, peak)
+            # save dicts
+            out = open(os.path.join(outdir, 'submats_%s.pickle' % (peak)), 'wb')
+            dump({'passage': passage, 
+                  'sum_raw': sum_raw,
+                  'sum_nrm': sum_nrm,
+                  'sqr_raw': sqr_raw,
+                  'sqr_nrm': sqr_nrm}, out)
+            out.close()
+        else:
+            print 'No information at this interval: ', peak
 
 
 def get_options():
