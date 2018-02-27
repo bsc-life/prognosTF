@@ -52,28 +52,64 @@ def binning_bed(peak_file, resolution, windows_span, max_dist, outdir,
     wsp = (windows_span * 2) + 1
     mdr = max_dist / resolution
 
-    pairs = ((a, b) for a, b in combinations(bin_coordinate, 2)
-             if a[0] == b[0] and wsp <= abs(b[1] - a[1]) <= mdr)
-
     print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), '- Writing list of coordinates...'
 
     intervals = {}
-    for (chromosome1, bs1, f1), (chromosome2,  bs2, f2) in pairs:
-        distance = abs(bs1 - bs2)
-        for lower, upper in windows:
-            if lower < distance <= upper:
-                intervals.setdefault((lower, upper), {})
-                intervals[(lower, upper)].setdefault(
-                   (f1, f2), []).append((chromosome1, bs1, chromosome2, bs2))
+    pairs = ((a, b) for a, b in combinations(bin_coordinate, 2)
+             if a[0] == b[0] and wsp <= abs(b[1] - a[1]) <= mdr)
+    num_win = sorted([w for w in windows if w not in ['inter', 'intra']])
+    # we can go faster if windows are not ovelapping
+    for i, (b, e) in enumerate(num_win[:-1]):
+        if max((b, e)) > min(num_win[i + 1]):
+            overlapping = True
+            break
+    else:
+        overlapping = False
+    # put pairs in intervals
+    if overlapping:
+        for (chrom1, bs1, f1), (chrom2,  bs2, f2) in pairs:
+            distance = abs(bs1 - bs2)
+            for lower, upper in (w for w in windows if w not in ['inter', 'intra']):
+                if lower < distance <= upper:
+                    intervals.setdefault((lower, upper), {})
+                    intervals[(lower, upper)].setdefault(
+                    (f1, f2), []).append((chrom1, bs1, chrom2, bs2))
+    else:
+        for (chrom1, bs1, f1), (chrom2,  bs2, f2) in pairs:
+            distance = abs(bs1 - bs2)
+            for lower, upper in (w for w in windows if w not in ['inter', 'intra']):
+                if lower < distance <= upper:
+                    intervals.setdefault((lower, upper), {})
+                    intervals[(lower, upper)].setdefault(
+                    (f1, f2), []).append((chrom1, bs1, chrom2, bs2))
+                    break
+    if 'inter' in windows:
+        pairs = ((a, b) for a, b in combinations(bin_coordinate, 2)
+                if a[0] != b[0])
+        intervals['inter'] = {}
+        for (chrom1, bs1, f1), (chrom2,  bs2, f2) in pairs:
+            intervals['inter'].setdefault(
+                (f1, f2), []).append((chrom1, bs1, chrom2, bs2))
+    if 'intra' in windows:
+        pairs = ((a, b) for a, b in combinations(bin_coordinate, 2)
+                if a[0] == b[0] and wsp <= abs(b[1] - a[1]) <= mdr)
+        intervals['intra'] = {}
+        for (chrom1, bs1, f1), (chrom2,  bs2, f2) in pairs:
+            intervals['intra'].setdefault(
+                (f1, f2), []).append((chrom1, bs1, chrom2, bs2))
 
     # define categories and write pairs
-    for beg, end in intervals:
-        print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Writing interval: ', beg, end
-        for f1, f2 in intervals[(beg, end)]:
+    for window in intervals:
+        print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Writing interval: ', window
+        for f1, f2 in intervals[window]:
             extra = ('both' if f1 == f2 else f1) + '_' + f2
-            w = open(path.join(outdir, '%s_%d_%d_%s.tsv' % (
-                name, beg * resolution, end * resolution, extra)), 'w')
-            for c1, s1, c2, s2 in intervals[(beg, end)][(f1, f2)]:
+            if window != 'inter':
+                window_name = '%d_%d' % (beg * resolution, end * resolution)
+            else:
+                window_name = window
+            w = open(path.join(outdir, '%s_%s_%s.tsv' % (
+                name, window_name, extra)), 'w')
+            for c1, s1, c2, s2 in intervals[window][(f1, f2)]:
                 start1, end1 = s1 - windows_span, s1 + windows_span
                 start2, end2 = s2 - windows_span, s2 + windows_span
                 # check chromosome length
@@ -97,8 +133,12 @@ def main():
     max_dist     = opts.max_dist
     windows      = opts.windows
 
-    windows = [[int(x) / resolution for x in win.split('-')] for win in windows]
-
+    windows = [[int(x) / resolution for x in win.split('-')] 
+               if win not in  ['inter', 'intra'] else win for win in windows]
+    for b, e in windows:
+        if b >= e:
+            raise Exception('ERROR: begining of windows should be smaller '
+                            'than end')
     ## peaks file sorted per chromosome
     bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references, [x / resolution + 1
@@ -150,9 +190,12 @@ def get_options():
                         help='''[%(default)s] Max dist between center peaks''')
     parser.add_argument('-w','--windows', dest='windows', required=False,
                         default=windows, metavar='INT-INT', type=str,nargs="+",
-                        help='''[%(default)s] If only interested in some intervals to check:
-                        -w 1000000-2000000 2000000-5000000" correspond to 2 window intervals,
-                        one from 1Mb to 2Mb and one from 2Mb to 5Mb.''')
+                        help='''[%(default)s] If only interested in some 
+                        intervals to check: "-w 1000000-2000000 2000000-5000000"
+                        correspond to 2 window intervals, one from 1Mb to 2Mb
+                        and one from 2Mb to 5Mb. Use "-w inter" for 
+                        inter-chromosomal regions, or "-w intra" for 
+                        intra-chromosomal (whithout distance restriction)''')
 
     opts = parser.parse_args()
     return opts

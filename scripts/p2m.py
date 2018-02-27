@@ -22,6 +22,7 @@ def mkdir(dnam):
         if exc.errno != errno.EEXIST or not os.path.isdir(dnam):
             raise
 
+
 def extract_coordinates(peak_fname, tmp_fname, resolution, section_pos,
                         tmpdir, badcols):
     '''Chunk file into multiple, and write them in parallel per file write coord of 10,000 peak pairs
@@ -33,14 +34,12 @@ def extract_coordinates(peak_fname, tmp_fname, resolution, section_pos,
         beg1, end1, beg2, end2 = int(beg1), int(end1), int(beg2), int(end2)
         if beg1 > beg2:
             beg1, end1, beg2, end2 = beg2, end2, beg1, end1
-
         pos1 = section_pos[chr1][0]
         pos2 = section_pos[chr2][0]
         start_bin1 = pos1 + (beg1 / resolution)
         end_bin1   = pos1 + (end1 / resolution) + 1
         start_bin2 = pos2 + (beg2 / resolution)
         end_bin2   = pos2 + (end2 / resolution) + 1
-
         for x, p1 in enumerate(xrange(start_bin1, end_bin1)):
             if p1 in badcols:
                 continue
@@ -104,8 +103,11 @@ def mean_metamatrix(sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage, outdir, label):
     array_avg_nrm = np.zeros((size, size))
     array_std_raw = np.zeros((size, size))
     array_std_nrm = np.zeros((size, size))
+    array_passage = np.zeros((size, size))
+
     for x in sum_raw:
         N = float(passage[x])
+        array_passage[x] = N
         array_avg_raw[x] = sum_raw[x] / N
         array_avg_nrm[x] = sum_nrm[x] / N
         array_std_raw[x] = (sqr_raw[x] / N - (sum_raw[x] / N)**2)**0.5
@@ -115,6 +117,7 @@ def mean_metamatrix(sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage, outdir, label):
     np.savetxt(os.path.join(outdir, 'mean_nrm_' + label + '.txt'), array_avg_nrm)
     np.savetxt(os.path.join(outdir, 'stdv_raw_' + label + '.txt'), array_std_raw)
     np.savetxt(os.path.join(outdir, 'stdv_nrm_' + label + '.txt'), array_std_nrm)
+    np.savetxt(os.path.join(outdir, 'passages_' + label + '.txt'), array_passage)
 
 
 def main():
@@ -164,15 +167,14 @@ def main():
                          resolution, section_pos, tmpdir, badcols))
     pool.close()
     pool.join()
-
     # sort all sublists of peaks
     procs = []
     for peak in peaks:
-        peaks[peak]['sorted_path'] = peaks[peak]['tmp_path'] + '_sorted'
+        peaks[peak]['sorted'] = peaks[peak]['tmp_path'] + '_sorted'
         procs.append(subprocess.Popen(("sort -k1,2n -S 20% --parallel={0} {1} "
                                        "--temporary-directory={2} > {3}").format(
                 opts.ncpus, peaks[peak]['tmp_path'], tmpdir,
-                peaks[peak]['sorted_path']), shell=True))
+                peaks[peak]['sorted']), shell=True))
     while procs:
         for p in procs:
             if p.poll() == 0:
@@ -185,8 +187,7 @@ def main():
     pool = mu.Pool(ncpus)
     procs = {}
     for peak in peaks:
-        procs[peak] = pool.apply_async(readfiles, (genomic_mat, 
-                                                   peaks[peak]['sorted_path']))
+        procs[peak] = pool.apply_async(readfiles, (genomic_mat, peaks[peak]['sorted']))
     pool.close()
     pool.join()
 
@@ -205,10 +206,8 @@ def main():
             # save dicts
             out = open(os.path.join(outdir, 'submats_%s.pickle' % (peak)), 'wb')
             dump({'passage': passage, 
-                  'sum_raw': sum_raw,
-                  'sum_nrm': sum_nrm,
-                  'sqr_raw': sqr_raw,
-                  'sqr_nrm': sqr_nrm}, out)
+                  'sum_raw': sum_raw, 'sum_nrm': sum_nrm,
+                  'sqr_raw': sqr_raw, 'sqr_nrm': sqr_nrm}, out)
             out.close()
         else:
             print 'No information at this interval: ', peak
