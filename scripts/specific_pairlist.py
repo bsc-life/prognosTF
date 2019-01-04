@@ -133,7 +133,7 @@ def main():
     max_dist     = opts.max_dist
     windows      = opts.windows
 
-    windows = [[int(x) / resolution for x in win.split('-')] 
+    windows = [[int(x) / resolution for x in win.split('-')]
                if win not in  ['inter', 'intra'] else win for win in windows]
     for b, e in windows:
         if b >= e:
@@ -190,11 +190,11 @@ def get_options():
                         help='''[%(default)s] Max dist between center peaks''')
     parser.add_argument('-w','--windows', dest='windows', required=False,
                         default=windows, metavar='INT-INT', type=str,nargs="+",
-                        help='''[%(default)s] If only interested in some 
+                        help='''[%(default)s] If only interested in some
                         intervals to check: "-w 1000000-2000000 2000000-5000000"
                         correspond to 2 window intervals, one from 1Mb to 2Mb
-                        and one from 2Mb to 5Mb. Use "-w inter" for 
-                        inter-chromosomal regions, or "-w intra" for 
+                        and one from 2Mb to 5Mb. Use "-w inter" for
+                        inter-chromosomal regions, or "-w intra" for
                         intra-chromosomal (whithout distance restriction)''')
 
     opts = parser.parse_args()
