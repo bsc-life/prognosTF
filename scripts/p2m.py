@@ -1,18 +1,26 @@
-from collections import OrderedDict
-from argparse    import ArgumentParser
-from datetime    import datetime
-from time        import sleep
-import subprocess
-import glob
-import multiprocessing as mu
-from functools import partial
+
+from collections     import OrderedDict, defaultdict
+from argparse        import ArgumentParser
+from datetime        import datetime
+from time            import time, sleep
+from subprocess      import Popen
+from glob            import glob
+from multiprocessing import Pool
+from cPickle         import dump, load
+
 import os
 import errno
-from collections import defaultdict
-from cPickle import dump, load
 
 import numpy as np
 from pysam import AlignmentFile
+
+
+def printime(msg):
+    print (msg +
+           (' ' * (79 - len(msg.replace('\n', '')))) +
+           '[' +
+           str(datetime.fromtimestamp(time()).strftime('%Y-%m-%d %H:%M:%S')) +
+           ']')
 
 
 def mkdir(dnam):
@@ -24,10 +32,12 @@ def mkdir(dnam):
 
 
 def extract_coordinates(peak_fname, tmp_fname, resolution, section_pos,
-                        tmpdir, badcols):
-    '''Chunk file into multiple, and write them in parallel per file write coord of 10,000 peak pairs
-    Write a dictionary depending of pairs of peak per target'''
-    peak_tmp_fname = os.path.split(peak_fname)[-1]
+                        badcols):
+    '''
+    Chunk file into multiple, and write them in parallel per file write coord
+    of 10,000 peak pairs Write a dictionary depending of pairs of peak per
+    target
+    '''
     out = open(tmp_fname, 'w')
     for line in open(peak_fname):
         chr1, beg1, end1, chr2, beg2, end2 = line.split()
@@ -40,13 +50,14 @@ def extract_coordinates(peak_fname, tmp_fname, resolution, section_pos,
         end_bin1   = pos1 + (end1 / resolution) + 1
         start_bin2 = pos2 + (beg2 / resolution)
         end_bin2   = pos2 + (end2 / resolution) + 1
-        for x, p1 in enumerate(xrange(start_bin1, end_bin1)):
-            if p1 in badcols:
-                continue
-            for y, p2 in enumerate(xrange(start_bin2, end_bin2)):
-                if p2 in badcols:
-                    continue
-                out.write('{}\t{}\t{}\t{}\n'.format(p1, p2, x, y))
+
+        range1 = [(x, p1) for x, p1 in enumerate(xrange(start_bin1, end_bin1))
+                  if p1 not in badcols]
+        range2 = [(y, p2) for y, p2 in enumerate(xrange(start_bin2, end_bin2))
+                  if p2 not in badcols]
+        if range1 and range2:
+            out.write('\n'.join('{}\t{}\t{}\t{}'.format(p1, p2, x, y)
+                                for x, p1 in range1 for y, p2 in range2) + '\n')
     out.close()
 
 
@@ -64,11 +75,14 @@ def readfiles(file1, file2):
     sum_nrm = defaultdict(float)
     sqr_nrm = defaultdict(float)
     passage = defaultdict(int)
-    print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ' - Reading BAM and peaks from %s...' % file2
+    printime(' - Reading BAM and peaks from %s...' % file2)
     fh1 = open(file1)
-    fh2 = open(file2)
-    pos1, raw, nrm = split_line1(fh1.next())
-    pos2, x, y = split_line2(fh2.next())
+    try:
+        fh2 = open(file2)
+    except IOError:
+        return
+    pos1, raw, nrm = split_line1(next(fh1))
+    pos2, x, y = split_line2(next(fh2))
     try:
         while True:
             if pos2 > pos1:
@@ -91,7 +105,7 @@ def readfiles(file1, file2):
     except StopIteration:
         fh1.close()
         fh2.close()
-    print datetime.now().strftime('%Y-%m-%d %H:%M:%S'),' - Finished extracting %s' % file2
+    printime(' - Finished extracting %s' % file2)
     return sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage
 
 
@@ -142,7 +156,7 @@ def main():
 
     # get chromosome lengths
     bamfile  = AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references, 
+    sections = OrderedDict(zip(bamfile.references,
                                [x / resolution + 1 for x in bamfile.lengths]))
     total = 0
     section_pos = dict()
@@ -151,7 +165,7 @@ def main():
         total += sections[crm]
 
     # given sublist as input
-    sublists = glob.glob(os.path.join(peak_file, '*'))
+    sublists = glob(os.path.join(peak_file, '*'))
     peaks = {}
     for sublist in sublists:
         peak_fname = os.path.split(sublist)[-1]
@@ -160,84 +174,85 @@ def main():
             'tmp_path': os.path.join(tmpdir, peak_fname + '_tmp')}
 
     # extract all sublists of peaks
-    pool = mu.Pool(ncpus)
+    pool = Pool(ncpus)
+    printime('Extracting coordinates')
     for peak in peaks:
-        pool.apply_async(extract_coordinates, 
+        pool.apply_async(extract_coordinates,
                          args=(peaks[peak]['ori_path'], peaks[peak]['tmp_path'],
-                         resolution, section_pos, tmpdir, badcols))
+                               resolution, section_pos, badcols))
     pool.close()
     pool.join()
+
     # sort all sublists of peaks
-    procs = []
+    printime('Sorting coordinates')
     for peak in peaks:
         peaks[peak]['sorted'] = peaks[peak]['tmp_path'] + '_sorted'
-        procs.append(subprocess.Popen(("sort -k1,2n -S 20% --parallel={0} {1} "
-                                       "--temporary-directory={2} > {3}").format(
-                opts.ncpus, peaks[peak]['tmp_path'], tmpdir,
-                peaks[peak]['sorted']), shell=True))
-    while procs:
-        for p in procs:
-            if p.poll() == 0:
-                procs.remove(p)
-            elif p.poll() is not None:
-                raise Exception('ERROR: problem sorting: %s' % p.communicate())
-        sleep(0.1)
+        Popen(("sort -k1,2n -S 20% --parallel={0} {1} "
+               "--temporary-directory={2} > {3}").format(
+                   opts.ncpus, peaks[peak]['tmp_path'], tmpdir,
+                   peaks[peak]['sorted']), shell=True).communicate()
 
     # extract submatrices
-    pool = mu.Pool(ncpus)
+    pool = Pool(ncpus)
+    printime('Getting interactions')
     procs = {}
     for peak in peaks:
+        readfiles(genomic_mat, peaks[peak]['sorted'])
         procs[peak] = pool.apply_async(readfiles, (genomic_mat, peaks[peak]['sorted']))
     pool.close()
     pool.join()
 
-    # clean
-    for peak in peaks:
-        os.system('rm -f '  + peaks[peak]['tmp_path'])
-    os.system('rm -rf ' + tmpdir)
+    # # clean
+    # for peak in peaks:
+    #     os.system('rm -f '  + peaks[peak]['tmp_path'])
+    # os.system('rm -rf ' + tmpdir)
 
     # save meta-waffles
     for peak in peaks:
-        sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage = procs[peak].get()
+        try:
+            sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage = procs[peak].get()
+        except TypeError:
+            continue
         if passage:
-            print datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ' - Generating meta-waffle %s...' % peak
+            printime(' - Generating meta-waffle %s...' % peak)
             # get mean matrix, raw and norm divided pasages
             mean_metamatrix(sum_raw, sum_nrm, sqr_raw, sqr_nrm, passage, outdir, peak)
             # save dicts
             out = open(os.path.join(outdir, 'submats_%s.pickle' % (peak)), 'wb')
-            dump({'passage': passage, 
+            dump({'passage': passage,
                   'sum_raw': sum_raw, 'sum_nrm': sum_nrm,
                   'sqr_raw': sqr_raw, 'sqr_nrm': sqr_nrm}, out)
             out.close()
         else:
-            print 'No information at this interval: ', peak
+            print('No information at this interval: ', peak)
 
 
 def get_options():
     parser = ArgumentParser()
 
-    parser.add_argument('-i', '--peak', dest='peak_file',required=True, default=False,
+    parser.add_argument('-i', '--peak', dest='peak_file', required=True, default=False,
                         help='''Pairwise peaks to compute average submatrix (norm and raw)''')
-    parser.add_argument('-o', '--outdir',dest='outdir',required=True, 
+    parser.add_argument('-o', '--outdir', dest='outdir', required=True,
                         metavar='PATH', help='output directory')
-    parser.add_argument('-bam', '--bam',dest='inbam',required=True, default=False,
-                        help= 'Input HiC-BAM file')
-    parser.add_argument('-b', '--biases',dest='biases',default=True, help = 'Biases', 
+    parser.add_argument('-bam', '--bam', dest='inbam', required=True, default=False,
+                        help='Input HiC-BAM file')
+    parser.add_argument('-b', '--biases', dest='biases', default=True, help='Biases',
                         required=True)
-    parser.add_argument('-m', '--genomic_mat', dest='genomic_mat',default=True, 
+    parser.add_argument('-m', '--genomic_mat', dest='genomic_mat', default=True,
                         metavar='GENOMIC_MATRIX', required=True,
-                        help = '''Path to genomic matrix in 3 columns format 
+                        help='''Path to genomic matrix in 3 columns format
                         (should be sorted with `sort -k1,2n`)''')
     parser.add_argument('-r', '--resolution', dest='resolution', required=True, default=False,
                         type=int, help='wanted resolution from generated matrix')
-    parser.add_argument('-t', '--tmp',dest='tmpdir', default=None,
+    parser.add_argument('-t', '--tmp', dest='tmpdir', default=None,
                         help='Tmpdir to store coordinates files')
-    parser.add_argument('-C', '--cpus',dest='ncpus',type=int, default=8,
-                        help='''[%(default)s] number of cpus to be used for parsing the HiC-BAM file''')
+    parser.add_argument('-C', '--cpus', dest='ncpus', type=int, default=8,
+                        help='''[%(default)s] number of cpus to be used for parsing
+                        the HiC-BAM file''')
 
     opts = parser.parse_args()
 
     return opts
 
-if __name__=='__main__':
+if __name__ == '__main__':
     exit(main())

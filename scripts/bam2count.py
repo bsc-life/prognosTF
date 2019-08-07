@@ -2,23 +2,18 @@ __author__ = 'sgalan'
 
 import os
 
-from glob                            import glob
 from subprocess                      import Popen
 from multiprocessing                 import cpu_count
 from argparse                        import ArgumentParser
 from collections                     import OrderedDict
-from cPickle                         import load
-from math                            import isnan
-from StringIO                        import StringIO
 from datetime                        import datetime
 
 from pytadbit.parsers.hic_bam_parser import get_biases_region, _iter_matrix_frags
-from pytadbit.parsers.hic_bam_parser import printime, get_matrix
-from pytadbit.parsers.hic_bam_parser import read_bam, filters_to_bin
-from pytadbit.utils.extraviews       import nicer
+from pytadbit.parsers.hic_bam_parser import read_bam, filters_to_bin, printime
 from pytadbit.utils.file_handling    import mkdir
+from pytadbit.utils.extraviews       import nicer
 
-import pysam
+from pysam                           import AlignmentFile
 
 
 def write_matrix(inbam, resolution, biases, outdir,
@@ -36,7 +31,7 @@ def write_matrix(inbam, resolution, biases, outdir,
         region2=region2, start2=start2, end2=end2,
         tmpdir=tmpdir, verbose=verbose)
 
-    bamfile = pysam.AlignmentFile(inbam, 'rb')
+    bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references,
                                [x / resolution + 1 for x in bamfile.lengths]))
 
@@ -55,37 +50,37 @@ def write_matrix(inbam, resolution, biases, outdir,
     if verbose:
         printime('  - Writing matrices')
 
-    fnam = os.path.join(outdir, '{}_bam_{}kb.tsv'.format(region1, resolution / 1000))
-
-    out = open(os.path.join(fnam), 'w')
+    fnam = os.path.join(outdir, '{}_bam_{}.tsv'.format(os.path.split(outdir)[-1], nicer(resolution, sep='')))
+    mkdir(outdir)
+    out = open(fnam, 'w')
 
     # pull all sub-matrices and write full matrix
     for c, j, k, v in _iter_matrix_frags(chunks, tmpdir, rand_hash,
                                          verbose=verbose, clean=clean):
-        if k < j: # we are only going to keep half of the matrix
+        if k < j or j in bads1 or k in bads2:  # we keep only half matrix
             continue
-        if j not in bads1 and k not in bads2:
-            n = v / bias1[j] / bias2[k] / decay[c][abs(j-k)]
-            pos1 = j + section_pos[region1][0]
-            pos2 = k + section_pos[region1][0]
-            out.write('{}\t{}\t{}\t{}\n'.format(pos1, pos2, v, n))
-
+        try:
+            n = v / bias1[j] / bias2[k] / decay[c][k - j]  # normalize
+        except KeyError:
+            n = v / bias1[j] / bias2[k]  # normalize
+        out.write('{}\t{}\t{}\t{}\n'.format(j, k, v, n))
     out.close()
 
     # this is the last thing we do in case something goes wrong
-    os.system('rm -rf %s' % (os.path.join(tmpdir, '_tmp_%s' % (rand_hash))))
+    if clean:
+        os.system('rm -rf %s' % (os.path.join(tmpdir, '_tmp_%s' % (rand_hash))))
 
     if  verbose:
         printime('\nDone.')
 
 
 def sort_BAMtsv(outdir, resolution):
-    all_tsv = glob(outdir + "*_bam_%ikb.tsv"%(resolution / 1000))
-    for tsv in all_tsv:
-        print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Sorting BAM matrix: ', tsv)
-        # sort file first and second column and write to same file
-        fh = Popen("sort -k1n -k2n -S 20% "+ tsv+ " -o "+ tsv, shell=True)
-        fh.communicate()
+    tsv = os.path.join(outdir, "{}_bam_{}.tsv".format(
+        os.path.split(outdir)[-1], nicer(resolution, sep='')))
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Sorting BAM matrix: ', tsv)
+    # sort file first and second column and write to same file
+    _ = Popen("sort -k1n -k2n -S 10% {0} -o {0}".format(tsv),
+              shell=True).communicate()
 
 
 def main():
@@ -95,19 +90,12 @@ def main():
     outdir = opts.outdir
     biases_file = opts.biases_file
 
-    bamfile = pysam.AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references,
-                               [x / resolution + 1 for x in bamfile.lengths]))
-
-    # remove nan from biases ONE-D
-    for chromosome in sections.keys():
-        print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-              ' - Splitting peak pairs per chromosome...')
-        write_matrix(inbam, resolution, biases_file, outdir, region1=chromosome,
-                     ncpus=opts.ncpus)
+    write_matrix(inbam, resolution, biases_file, outdir,
+                 ncpus=opts.ncpus, clean=opts.clean)
 
     #sort all files for only read once per pair of peaks to extract
     sort_BAMtsv(outdir, resolution)
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Done.')
 
 
 def get_options():
@@ -120,6 +108,8 @@ def get_options():
                         help='Outdir to store counts')
     parser.add_argument('-b', '--biases', dest='biases_file', required=True, default=False,
                         help='Pickle file with biases')
+    parser.add_argument('--keep_tmp', dest='clean', default=True, action='store_false',
+                        help='Keep temporary files for debugging')
     parser.add_argument('-C', dest='ncpus', required=True, default=cpu_count(),
                         type=int, help='Number of CPUs used to read BAM')
     opts = parser.parse_args()
