@@ -32,7 +32,8 @@ def printime(msg):
 
 
 def binning_bed(peak_files, resolution, windows_span, max_dist, outdir,
-                name, chrom_sizes, windows, ncpus, tmpdir, **kwargs):
+                name, chrom_sizes, windows, ncpus, in_feature, tmpdir,
+                **kwargs):
     '''
     Input BED file(s) of ChIP peaks and bin into desired resolution of Hi-C
     '''
@@ -51,6 +52,13 @@ def binning_bed(peak_files, resolution, windows_span, max_dist, outdir,
         c, p1, p2 = line.split()[:3]
         return c, (int(p1) + int(p2)) / 2 / resolution, ''
 
+    def read_line_no_feature_but(line):
+        '''
+        Get information per peak
+        '''
+        c, p1, p2 = line.split()[:3]
+        return c, (int(p1) + int(p2)) / 2 / resolution, '{}:{}-{}'.format(c, p1, p2)
+
     peaks1 = open(peak_files[0], "r")
     try:
         peaks2 = open(peak_files[1])
@@ -63,7 +71,10 @@ def binning_bed(peak_files, resolution, windows_span, max_dist, outdir,
         read_line_feature(line)
         read_line1 = read_line_feature
     except ValueError:
-        read_line1 = read_line_no_feature
+        if in_feature:
+            read_line1 = read_line_no_feature_but
+        else:
+            read_line1 = read_line_no_feature
     peaks1.seek(0)
 
     line = next(peaks2)
@@ -73,12 +84,15 @@ def binning_bed(peak_files, resolution, windows_span, max_dist, outdir,
     except ValueError:
         read_line2 = read_line_no_feature
 
+    max_chrom = dict((c, chrom_sizes[c] // resolution - windows_span)
+                     for c in chrom_sizes)
+
     bin_coordinate1 = set((c, p, f) for c, p, f in map(read_line1, peaks1)
-                          if p > windows_span)  # TODO: also remove position too close to the end
+                          if windows_span < p < max_chrom[c])
 
     peaks2.seek(0)  # needs to be here in case peaks1 and peak2 are the same
     bin_coordinate2 = set((c, p, f) for c, p, f in map(read_line2, peaks2)
-                          if p > windows_span)  # TODO:  also remove position too close to the end
+                          if windows_span < p < max_chrom[c])
 
     printime('Total of different bin coordinates: {} and {}'.format(
         len(bin_coordinate1), len(bin_coordinate2)))
@@ -189,10 +203,12 @@ def main():
     max_dist     = opts.max_dist
     windows      = opts.windows
     ncpus        = opts.ncpus
+    in_feature   = opts.first_is_feature
     tmpdir       = opts.tmpdir
     if not tmpdir:
         tmpdir = os.path.join(outdir, 'tmp')
 
+    mkdir(outdir)
     mkdir(tmpdir)
 
     windows = [[int(x) / resolution for x in win.split('-')]
@@ -216,7 +232,7 @@ def main():
                                   [x for x in bamfile.lengths]))
 
     binning_bed(peak_files, resolution, windows_span, max_dist, outdir, name,
-                chrom_sizes, windows, ncpus, tmpdir)
+                chrom_sizes, windows, ncpus, in_feature, tmpdir)
 
     # clean
     os.system('rm -rf ' + tmpdir)
@@ -267,6 +283,11 @@ def get_options():
                         and one from 2Mb to 5Mb. Use "-w inter" for
                         inter-chromosomal regions, or "-w intra" for
                         intra-chromosomal (whithout distance restriction)''')
+    parser.add_argument('--first_is_feature', dest='first_is_feature', default=False,
+                        action='store_true', help='''When 2 BED files are input,
+                        the peaks in the first BED should be also considered as
+                        feature. This is to create average sub-matrices for
+                        each peak in the first BED file.''')
     parser.add_argument('-C', '--cpus', dest='ncpus', type=int, default=8,
                         help='''[%(default)s] number of cpus to be used for parsing
                         the HiC-BAM file''')
