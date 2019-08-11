@@ -110,7 +110,7 @@ def get_options():
                         help='Pickle file with biases')
     parser.add_argument('--keep_tmp', dest='clean', default=True, action='store_false',
                         help='Keep temporary files for debugging')
-    parser.add_argument('-C', dest='ncpus', required=True, default=cpu_count(),
+    parser.add_argument('-C', dest='ncpus', default=cpu_count(),
                         type=int, help='Number of CPUs used to read BAM')
     opts = parser.parse_args()
 
