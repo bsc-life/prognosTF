@@ -1,5 +1,11 @@
 # meta Waffle
 
+## Requirements
+
+ - TADbit
+ - scipy
+ - numpy
+
 ## Generate sub-matrices at a given resolution 
 
 We will need sub-matrices from which we will extract sub-matrices.

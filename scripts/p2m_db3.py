@@ -139,11 +139,12 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
         for a in bin_coordinate1:
             for b in bin_coordinate2:
                 if test(a, b):
-                    buf_beg = a
+                    buf_beg = section_pos[a[0]][0] + a[1]
                     break
             else:
                 continue
             break
+
         for (chr1, bs1, f1), (chr2, bs2, f2) in pairs:
             beg1, end1 = bs1 - windows_span, bs1 + windows_span
             beg2, end2 = bs2 - windows_span, bs2 + windows_span
@@ -154,10 +155,10 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
 
             pos1 = section_pos[chr1][0]
             pos2 = section_pos[chr2][0]
-            start_bin1 = pos1 + (beg1 / resolution)
-            end_bin1   = pos1 + (end1 / resolution) + 1
-            start_bin2 = pos2 + (beg2 / resolution)
-            end_bin2   = pos2 + (end2 / resolution) + 1
+            start_bin1 = pos1 + beg1
+            end_bin1   = pos1 + end1 + 1
+            start_bin2 = pos2 + beg2
+            end_bin2   = pos2 + end2 + 1
 
             range1 = [(x, p1) for x, p1 in enumerate(range(start_bin1, end_bin1))
                       if p1 not in badcols]
@@ -168,14 +169,13 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
                 continue
             for x, p1 in range1:
                 for y, p2 in range2:
-                    buf.append(p1, p2, x, y, what)
+                    buf.append(((p1, p2), x, y, what))
             if end_bin1 - buf_beg > windows_span * 2:
                 buf.sort()
                 top = end_bin1 - windows_span
-                p1 = 0
                 while p1 < top:
                     p1, p2, x, y, what = buf.pop(0)
-                    yield p1, p2, x, y, what
+                    yield (p1, p2), x, y, what
                 buf_beg = p1
         while buf:
             yield buf.pop(0)
@@ -240,7 +240,7 @@ def main():
                                 'than end')
     ## peaks file sorted per chromosome
     bamfile = AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references, [x / resolution + 1
+    sections = OrderedDict(zip(bamfile.references, [x // resolution + 1
                                                     for x in bamfile.lengths]))
     total = 0
     section_pos = dict()
@@ -260,14 +260,16 @@ def main():
     iter_pairs = binning_bed(peak_files, resolution, windows_span, max_dist,
                              chrom_sizes, windows, in_feature, section_pos, badcols)
 
-    p = Popen('less', stdin=PIPE)
     proc = Popen(("sort -k9 -S 10% --parallel={0} "
                   "--temporary-directory={1} -o {2}").format(
                       ncpus, tmpdir, os.path.join(outdir, 'final_per_cell_sorted.tsv')),
-                 shell=True)
+                 shell=True, stdin=PIPE)
+
+    groups = defaultdict(int)
     for X, Y, x, y, raw, nrm, group in readfiles(genomic_mat, iter_pairs):
         c1, b1 = bins[X]
         c2, b2 = bins[Y]
+        groups[group] += 1
         try:
             proc.stdin.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                 c1, b1, c2, b2, x, y, raw, nrm, group))
@@ -277,16 +279,10 @@ def main():
                 break
             else:
                 raise
-    p.stdin.close()
-    p.wait()
+    proc.stdin.close()
+    proc.wait()
 
     printime('Summing peaks')
-    groups = defaultdict(int)
-    for chunk in peaks:
-        for l in open(peaks[chunk]['tmp_path'] + '_groups'):
-            g, v = l.split()
-            groups[g] += int(v)
-
     # initialize defaultdict and prev variable
     sum_raw = defaultdict(int)
     sqr_raw = defaultdict(int)
@@ -296,12 +292,12 @@ def main():
     fhandler = open(os.path.join(outdir, 'final_per_cell_sorted.tsv'))
     line = next(fhandler)
 
-    c1, b1, c2, b2, x, y, raw, nrm, group = line.split()
+    c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
     prev = group
     fhandler.seek(0)
     out = open(os.path.join(outdir, 'final_sum.pickle'), 'wb')
     for line in fhandler:
-        c1, b1, c2, b2, x, y, raw, nrm, group = line.split()
+        c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
         if group != prev:
             dump([prev, (sum_raw, sqr_raw, sum_nrm, sqr_nrm, passage, groups[prev])],
                  out, protocol=HIGHEST_PROTOCOL)
@@ -341,7 +337,7 @@ def get_options():
                '15000000-20000000',
                '20000000-30000000')
 
-    parser.add_argument('-i', '--peaks', dest='peak_files', required=True,
+    parser.add_argument('--peaks', dest='peak_files', required=True,
                         nargs="+", metavar='PATH',
                         help='''one or two pairwise peaks files to
                         compute average submatrix (norm and raw). These files
@@ -349,10 +345,14 @@ def get_options():
                         position, and may contain an extra column of feature. If
                         present, the resuilt will be retrurned according to the
                         possible combination of this feature''')
-    parser.add_argument('-b', '--bam', dest='inbam', required=True,
+    parser.add_argument('--bam', dest='inbam', required=True,
                         metavar='PATH', help='Input HiC-BAM file')
-    parser.add_argument('-b', '--biases', dest='biases', default=True, help='Biases',
+    parser.add_argument('--biases', dest='biases', default=True, help='Biases',
                         required=True)
+    parser.add_argument('--genomic_matrix', dest='genomic_mat', default=True,
+                        metavar='GENOMIC_MATRIX', required=True,
+                        help='''Path to genomic matrix in 3 columns format
+                        (should be sorted with `sort -k1,2n`)''')
     parser.add_argument('-r', '--resolution', dest='resolution', required=True,
                         metavar='INT', default=False, type=int,
                         help='wanted resolution from generated matrix')

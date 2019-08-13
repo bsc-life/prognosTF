@@ -152,10 +152,10 @@ def main():
     Popen('mv tmp/04_normalization/biases* data/biases.pickle', shell=True).communicate()
     Popen('rm -rf tmp', shell=True).communicate()
 
-    plt.figure(figsize=(41, 30))
-    plt.imshow(np.log2(matrix), interpolation='None', origin='lower')
-    plt.colorbar()
-    plt.savefig('data/matrix.png')
+    # plt.figure(figsize=(41, 30))
+    # plt.imshow(np.log2(matrix), interpolation='None', origin='lower')
+    # plt.colorbar()
+    # plt.savefig('data/matrix.png')
 
     print('Saving BEDs')
     out = open('data/peaks_protA.bed', 'w')
