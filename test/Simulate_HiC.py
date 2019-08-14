@@ -99,7 +99,7 @@ def main():
         out.write('@SQ\tSN:%s\tLN:%d\n' % (c, chroms[c] * reso - 1))
     matrix = [[0 for _ in range(sum(chroms.values()))]
               for _ in range(sum(chroms.values()))]
-    nrnd = 1000000
+    nrnd = 10000000
     bin_prob = 0.005
     nbs = iter(negative_binomial(1, bin_prob, size=nrnd))
     count = 0
@@ -152,10 +152,10 @@ def main():
     Popen('mv tmp/04_normalization/biases* data/biases.pickle', shell=True).communicate()
     Popen('rm -rf tmp', shell=True).communicate()
 
-    # plt.figure(figsize=(41, 30))
-    # plt.imshow(np.log2(matrix), interpolation='None', origin='lower')
-    # plt.colorbar()
-    # plt.savefig('data/matrix.png')
+    plt.figure(figsize=(41, 30))
+    plt.imshow(np.log2(matrix), interpolation='None', origin='lower')
+    plt.colorbar()
+    plt.savefig('data/matrix.png')
 
     print('Saving BEDs')
     out = open('data/peaks_protA.bed', 'w')

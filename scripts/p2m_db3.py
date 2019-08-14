@@ -61,7 +61,7 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
 
     peaks1 = open(peak_files[0], "r")
     try:
-        peaks2 = open(peak_files[1])
+        peaks2 = open(peak_files[1], "r")
         same = False
     except IndexError:
         same = True
@@ -90,21 +90,31 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
                      for c in chrom_sizes)
 
     bin_coordinate1 = set((c, p, f) for c, p, f in map(read_line1, peaks1)
-                          if windows_span < p < max_chrom[c])
+                          if windows_span <= p <= max_chrom[c])
 
     peaks2.seek(0)  # needs to be here in case peaks1 and peak2 are the same
     bin_coordinate2 = set((c, p, f) for c, p, f in map(read_line2, peaks2)
-                          if windows_span < p < max_chrom[c])
+                          if windows_span <= p <= max_chrom[c])
 
-    printime('Total of different bin coordinates: {} and {}'.format(
-        len(bin_coordinate1), len(bin_coordinate2)))
+    peaks1.seek(0)
+    npeaks1 = sum(1 for _ in peaks1)
+    peaks2.seek(0)
+    npeaks2 = sum(1 for _ in peaks2)
+
+    printime('Total of different bin coordinates in {}:'.format(
+        peak_files[0]))
+    printime(('   - {} (out of {})').format(
+        len(bin_coordinate1), npeaks1))
+    if not same:
+        printime('Total of different bin coordinates in {}:'.format(
+            peak_files[1]))
+        printime(('   - {} (out of {})').format(
+            len(bin_coordinate2), npeaks2))
 
     # sort peaks
+    # TODO uncomment
     bin_coordinate1 = sorted(bin_coordinate1)
-    if same:
-        bin_coordinate2 = bin_coordinate1[:]
-    else:
-        bin_coordinate2 = sorted(bin_coordinate2)
+    bin_coordinate2 = sorted(bin_coordinate2)
 
     # get all combinations of bin peaks:
     # - same chromosomes

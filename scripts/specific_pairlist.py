@@ -88,11 +88,11 @@ def binning_bed(peak_files, resolution, windows_span, max_dist, outdir,
                      for c in chrom_sizes)
 
     bin_coordinate1 = set((c, p, f) for c, p, f in map(read_line1, peaks1)
-                          if windows_span < p < max_chrom[c])
+                          if windows_span <= p <= max_chrom[c])
 
     peaks2.seek(0)  # needs to be here in case peaks1 and peak2 are the same
     bin_coordinate2 = set((c, p, f) for c, p, f in map(read_line2, peaks2)
-                          if windows_span < p < max_chrom[c])
+                          if windows_span <= p <= max_chrom[c])
 
     printime('Total of different bin coordinates: {} and {}'.format(
         len(bin_coordinate1), len(bin_coordinate2)))
@@ -174,9 +174,8 @@ def binning_bed(peak_files, resolution, windows_span, max_dist, outdir,
                 # check chromosome length
                 new_start1, new_end1 = start1 * resolution, end1 * resolution
                 new_start2, new_end2 = start2 * resolution, end2 * resolution
-                if new_end1 <= chrom_sizes[c1] and new_end2 <= chrom_sizes[c1]:
-                    out.write('%s\t%d\t%d\t%s\t%d\t%d\n' % (
-                        c1, new_start1, new_end1, c2, new_start2, new_end2))
+                out.write('%s\t%d\t%d\t%s\t%d\t%d\n' % (
+                    c1, new_start1, new_end1, c2, new_start2, new_end2))
             out.close()
 
             # sort it

@@ -81,6 +81,7 @@ def extract_coordinates(peak_fname, tmp_fname, resolution, section_pos,
                   if p1 not in badcols]
         range2 = [(y, p2) for y, p2 in enumerate(range(start_bin2, end_bin2))
                   if p2 not in badcols]
+
         # groups.setdefault(group, []).append(str(read))
         groups[group] += 1
         what = group  # '{}:{}'.format(chr2, beg2)
