@@ -155,6 +155,10 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
                 continue
             break
 
+        chrom_list = chrom_sizes.keys()
+
+        comp_chrom = lambda x, y: chrom_list.index(x) > chrom_list.index(y)
+        
         for (chr1, bs1, f1), (chr2, bs2, f2) in pairs:
             beg1, end1 = bs1 - windows_span, bs1 + windows_span
             beg2, end2 = bs2 - windows_span, bs2 + windows_span
@@ -162,6 +166,8 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
 
             if beg1 > beg2 and chr1 == chr2:
                 beg1, end1, beg2, end2 = beg2, end2, beg1, end1
+            elif chr1 != chr2 and comp_chrom(chr1, chr2):
+                beg1, end1, beg2, end2, chr2, chr1 = beg2, end2, beg1, end1, chr1, chr2
 
             pos1 = section_pos[chr1][0]
             pos2 = section_pos[chr2][0]
@@ -177,10 +183,12 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
 
             if not range1 or not range2:
                 continue
+
             for x, p1 in range1:
                 for y, p2 in range2:
                     buf.append(((p1, p2), x, y, what))
-            if end_bin1 - buf_beg > windows_span * 2:
+
+            if chr1 != chr2 or end_bin1 - buf_beg > windows_span * 2:
                 buf.sort()
                 top = end_bin1 - windows_span
                 while p1 < top:
@@ -337,7 +345,7 @@ def main():
 
 
 def get_options():
-    parser = ArgumentParser(usage="-i Peaks -r INT [options]")
+    parser = ArgumentParser()
 
     windows = ('255000-1000000',
                '1000000-2500000',

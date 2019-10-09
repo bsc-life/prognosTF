@@ -1,17 +1,23 @@
 #!/usr/bin/env python
 
 
-from random       import random, seed
-from collections  import OrderedDict
-from fractions    import gcd
-from subprocess   import Popen
-from functools    import reduce
+from random        import random, seed
+from collections   import OrderedDict
+try:
+    from math      import gcd
+except ImportError:
+    from fractions import gcd
+from subprocess    import Popen
+from functools     import reduce
 
 import numpy as np
-from numpy.random import negative_binomial
 
-from matplotlib   import pyplot as plt
+from numpy.random  import negative_binomial
 
+from matplotlib    import pyplot as plt
+
+
+QUICK = True
 
 def load_genome(chroms):
     sections = {}
@@ -27,10 +33,32 @@ def load_genome(chroms):
     weighted_chroms = [c for c in chroms for _ in range(int(chroms[c]**1.5 / d))]
     return sections, bins, weighted_chroms
 
+
 def main():
+    # some hardcoded defaults of course....
     seed_num = 1
+    if QUICK:
+        nrnd = 1000
+    else:
+        nrnd = 10000000
+
+    bin_prob = 0.005
+
+    # probability that an interaction comes from a loop
+    if QUICK:
+        loop_prob = 1
+    else:
+        loop_prob = 0.5
+
     reso = 10000
-    chroms = OrderedDict([('1', 500), ('2', 300), ('3', 200)])
+
+    if QUICK:
+        chroms = OrderedDict([('1', 50), ('2', 30)])
+    else:
+        chroms = OrderedDict([('1', 500), ('2', 300), ('3', 200)])
+    ###############
+
+
     genome_size = sum(chroms.values())
 
     sections, bins, weighted_chroms = load_genome(chroms)
@@ -38,15 +66,20 @@ def main():
     seed(seed_num)
     np.random.seed(seed_num)
 
-    npeaks = 40
+    if QUICK:
+        npeaks = 4
+    else:
+        npeaks = 40
+
     cmprts_pos = {}
     bad_cols = {}
     prob = 0.2
     step = 10
     for c in chroms:
         bad_cols[c] = set()
-        for _ in range(chroms[c] // 10):
-            bad_cols[c].add(int(random() * chroms[c]))
+        if not QUICK:
+            for _ in range(chroms[c] // 10):
+                bad_cols[c].add(int(random() * chroms[c]))
         cmprts_pos[c] = []
         end = 0
         beg = 0
@@ -74,23 +107,32 @@ def main():
             peaks2.add(bin1)
         peaks.add(bin1)
 
-    loops = set()
-    for bin1 in peaks:
-        for bin2 in peaks:
-            if random() < 0.1:
-                continue
-            if bin1 in peaks1:
-                range1 = 3
-            else:
-                range1 = 2
-            if bin2 in peaks1:
-                range2 = 3
-            else:
-                range2 = 2
-            for i in range(range1):
-                for j in range(range2):
-                    loops.add((bin1 + i, bin2 + j))
-                    loops.add((bin2 + j, bin1 + i))
+    if not QUICK:
+        loops = set()
+        for bin1 in peaks:
+            for bin2 in peaks:
+                if random() < 0.1:
+                    continue
+                if bin1 in peaks1:
+                    range1 = 3
+                else:
+                    range1 = 2
+                if bin2 in peaks1:
+                    range2 = 3
+                else:
+                    range2 = 2
+                for i in range(range1):
+                    for j in range(range2):
+                        loops.add((bin1 + i, bin2 + j))
+                        loops.add((bin2 + j, bin1 + i))
+    else:
+        loops = set()
+        for bin1 in peaks1:
+            for bin2 in peaks2:
+                # if random() < 0.1:
+                #     continue
+                loops.add((bin1, bin2))
+                loops.add((bin2, bin1))
 
     print('generating SAM')
     out = open('data/fake.sam', 'w')
@@ -99,8 +141,7 @@ def main():
         out.write('@SQ\tSN:%s\tLN:%d\n' % (c, chroms[c] * reso - 1))
     matrix = [[0 for _ in range(sum(chroms.values()))]
               for _ in range(sum(chroms.values()))]
-    nrnd = 10000000
-    bin_prob = 0.005
+
     nbs = iter(negative_binomial(1, bin_prob, size=nrnd))
     count = 0
     while count < nrnd:
@@ -127,13 +168,13 @@ def main():
                 continue
         bin1 = sections[c1] + pos1
         bin2 = sections[c2] + pos2
-        if random() < 0.5:
+        if random() <= loop_prob:
             if (bin1, bin2) not in loops:
                 continue
         out.write('SRR.{0}\t1024\t{1}\t{2}\t1\t75P\t{3}\t{4}\t75\t*\t*\n'.format(
-            i, c1, int(reso / 2 + pos1 * reso), c2, int(reso / 2 + pos2 * reso)))
+            count, c1, int(reso / 2 + pos1 * reso), c2, int(reso / 2 + pos2 * reso)))
         out.write('SRR.{0}\t1024\t{1}\t{2}\t1\t75P\t{3}\t{4}\t75\t*\t*\n'.format(
-            i, c2, int(reso / 2 + pos2 * reso), c1, int(reso / 2 + pos1 * reso)))
+            count, c2, int(reso / 2 + pos2 * reso), c1, int(reso / 2 + pos1 * reso)))
         matrix[bin1][bin2] += 1
         matrix[bin2][bin1] += 1
         count += 1
@@ -148,7 +189,8 @@ def main():
           shell=True).communicate()
 
     # print('tadbit normalize -w tmp --bam {} -r {}'.format('data/fake.bam', reso)).communicate()
-    Popen('tadbit normalize -w tmp --bam {} -r {}'.format('data/fake.bam', reso), shell=True).communicate()
+    Popen('tadbit normalize -w tmp --bam {} -r {} --min_count {}'.format(
+        'data/fake.bam', reso, 0 if QUICK else 100), shell=True).communicate()
     Popen('mv tmp/04_normalization/biases* data/biases.pickle', shell=True).communicate()
     Popen('rm -rf tmp', shell=True).communicate()
 
