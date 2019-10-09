@@ -38,24 +38,24 @@ def main():
     # some hardcoded defaults of course....
     seed_num = 1
     if QUICK:
-        nrnd = 1000
+        nrnd = 100
     else:
         nrnd = 10000000
 
     bin_prob = 0.005
 
     # probability that an interaction comes from a loop
-    if QUICK:
-        loop_prob = 1
-    else:
-        loop_prob = 0.5
-
     reso = 10000
 
     if QUICK:
         chroms = OrderedDict([('1', 50), ('2', 30)])
+        npeaks = 8
+        loop_prob = 1
     else:
         chroms = OrderedDict([('1', 500), ('2', 300), ('3', 200)])
+        npeaks = 40
+        loop_prob = 0.5
+
     ###############
 
 
@@ -65,11 +65,6 @@ def main():
 
     seed(seed_num)
     np.random.seed(seed_num)
-
-    if QUICK:
-        npeaks = 4
-    else:
-        npeaks = 40
 
     cmprts_pos = {}
     bad_cols = {}
@@ -135,6 +130,7 @@ def main():
                 loops.add((bin2, bin1))
 
     print('generating SAM')
+    Popen('mkdir -p data', shell=True).communicate()
     out = open('data/fake.sam', 'w')
     out.write('@HD\tVN:1.5\tSO:coordinate\n')
     for c in chroms:
@@ -194,8 +190,41 @@ def main():
     Popen('mv tmp/04_normalization/biases* data/biases.pickle', shell=True).communicate()
     Popen('rm -rf tmp', shell=True).communicate()
 
-    plt.figure(figsize=(41, 30))
+    if QUICK:
+        plt.figure(figsize=(10, 7))
+    else:
+        plt.figure(figsize=(41, 30))
     plt.imshow(np.log2(matrix), interpolation='None', origin='lower')
+
+    total = 0
+    xs = []
+    ys = []
+    for k in chroms:
+        xs.append(total)
+        xs.append(total)
+        ys.append(total)
+        total += chroms[k]
+        ys.append(total)
+
+    plt.plot(xs, ys, color='k')
+    plt.plot(ys, xs, color='k')
+    plt.plot([0, total], [0, total], color='k', alpha=0.5)
+
+    for p in peaks1:
+        plt.axvline(p, color='r', alpha=0.3)
+        plt.axhline(p, color='r', alpha=0.3)
+
+    for p in peaks2:
+        plt.axvline(p, color='b', alpha=0.3)
+        plt.axhline(p, color='b', alpha=0.3)
+
+    for i in range(len(matrix)):
+        for j in range(i, len(matrix)):
+            if matrix[i][j]:
+                plt.text(i, j, matrix[i][j])
+
+    plt.xlim(0, total)
+    plt.ylim(0, total)
     plt.colorbar()
     plt.savefig('data/matrix.png')
 
@@ -213,6 +242,9 @@ def main():
         bins[p][1] * reso + int(random() * 1000),
         bins[p][1] * reso + int(random() * 1000)) for p in sorted(peaks2)))
     out.close()
+
+    Popen('cat data/peaks_protA.bed data/peaks_protB.bed | sort -k1n -k2n > data/peaks_prot.bed',
+          shell=True).communicate()
 
     out = open('data/compartments.bed', 'w')
     out.write(''.join('{}\t{}\t{}\t{}\n'.format(

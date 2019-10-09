@@ -89,6 +89,7 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
     max_chrom = dict((c, chrom_sizes[c] // resolution - windows_span)
                      for c in chrom_sizes)
 
+    peaks1.seek(0)  # needs to be here in case peaks1 and peak2 are the same
     bin_coordinate1 = set((c, p, f) for c, p, f in map(read_line1, peaks1)
                           if windows_span <= p <= max_chrom[c])
 
@@ -112,7 +113,6 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
             len(bin_coordinate2), npeaks2))
 
     # sort peaks
-    # TODO uncomment
     bin_coordinate1 = sorted(bin_coordinate1)
     bin_coordinate2 = sorted(bin_coordinate2)
 
@@ -145,40 +145,35 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
         pairs = ((a, b) for a in bin_coordinate1 for b in bin_coordinate2
                  if test(a, b))
 
-        buf = []
-        for a in bin_coordinate1:
-            for b in bin_coordinate2:
-                if test(a, b):
-                    buf_beg = section_pos[a[0]][0] + a[1]
-                    break
-            else:
-                continue
-            break
-
-        chrom_list = chrom_sizes.keys()
-
-        comp_chrom = lambda x, y: chrom_list.index(x) > chrom_list.index(y)
-        
+        # Sort pairs of coordinates according to genomic position of the
+        # smallest of each pair, and store it into a new list
+        final_pairs = []
         for (chr1, bs1, f1), (chr2, bs2, f2) in pairs:
-            beg1, end1 = bs1 - windows_span, bs1 + windows_span
-            beg2, end2 = bs2 - windows_span, bs2 + windows_span
-            what = f1 + f2
+            pos1 = section_pos[chr1][0] + bs1
+            pos2 = section_pos[chr2][0] + bs2
 
-            if beg1 > beg2 and chr1 == chr2:
+            beg1 = pos1 - windows_span
+            end1 = pos1 + windows_span + 1
+            beg2 = pos2 - windows_span
+            end2 = pos2 + windows_span + 1
+
+            if beg1 > beg2:
                 beg1, end1, beg2, end2 = beg2, end2, beg1, end1
-            elif chr1 != chr2 and comp_chrom(chr1, chr2):
-                beg1, end1, beg2, end2, chr2, chr1 = beg2, end2, beg1, end1, chr1, chr2
 
-            pos1 = section_pos[chr1][0]
-            pos2 = section_pos[chr2][0]
-            start_bin1 = pos1 + beg1
-            end_bin1   = pos1 + end1 + 1
-            start_bin2 = pos2 + beg2
-            end_bin2   = pos2 + end2 + 1
+            what = f1 + f2
+            final_pairs.append((beg1, end1, beg2, end2, what))
 
-            range1 = [(x, p1) for x, p1 in enumerate(range(start_bin1, end_bin1))
+        final_pairs.sort()
+
+        # in buf we store a list of coordinates to be yielded
+        # when buf spans for twice the window span we sort it and empty it
+        buf = []
+        buf_beg = 0
+        for beg1, end1, beg2, end2, what in final_pairs:
+
+            range1 = [(x, p1) for x, p1 in enumerate(range(beg1, end1))
                       if p1 not in badcols]
-            range2 = [(y, p2) for y, p2 in enumerate(range(start_bin2, end_bin2))
+            range2 = [(y, p2) for y, p2 in enumerate(range(beg2, end2))
                       if p2 not in badcols]
 
             if not range1 or not range2:
@@ -188,13 +183,15 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
                 for y, p2 in range2:
                     buf.append(((p1, p2), x, y, what))
 
-            if chr1 != chr2 or end_bin1 - buf_beg > windows_span * 2:
+            if end1 - buf_beg > wsp:
                 buf.sort()
-                top = end_bin1 - windows_span
+                top = end1 - wsp
+                p1 = min(buf)[0][0]
                 while p1 < top:
-                    p1, p2, x, y, what = buf.pop(0)
+                    (p1, p2), x, y, what = buf.pop(0)
                     yield (p1, p2), x, y, what
                 buf_beg = p1
+        buf.sort()
         while buf:
             yield buf.pop(0)
 
@@ -324,7 +321,7 @@ def main():
             sum_nrm = defaultdict(float)
             sqr_nrm = defaultdict(float)
             passage = defaultdict(int)
-            prev = group
+            prev    = group
         raw = int(raw)
         nrm = float(nrm)
         y = int(y)

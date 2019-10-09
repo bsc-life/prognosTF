@@ -70,14 +70,11 @@ def write_matrix(inbam, resolution, biases, outdir,
     if clean:
         os.system('rm -rf %s' % (os.path.join(tmpdir, '_tmp_%s' % (rand_hash))))
 
-    if  verbose:
-        printime('\nDone.')
-
 
 def sort_BAMtsv(outdir, resolution):
     tsv = os.path.join(outdir, "{}_bam_{}.tsv".format(
         os.path.split(outdir)[-1], nicer(resolution, sep='')))
-    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Sorting BAM matrix: ', tsv)
+    printime('Sorting BAM matrix: {}'.format(tsv))
     # sort file first and second column and write to same file
     _ = Popen("sort -k1n -k2n -S 10% {0} -o {0}".format(tsv),
               shell=True).communicate()
@@ -95,7 +92,7 @@ def main():
 
     #sort all files for only read once per pair of peaks to extract
     sort_BAMtsv(outdir, resolution)
-    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Done.')
+    printime('Done.')
 
 
 def get_options():
