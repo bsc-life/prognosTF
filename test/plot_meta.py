@@ -21,7 +21,7 @@ for i in range(len(matrix)):
 plt.colorbar()
 
 matrix = [[passage[(i, j)] for i in range(size)] for j in range(size)]
-print passage
+
 plt.subplot(122)
 plt.imshow(np.log2(matrix), origin='lower')
 for i in range(len(matrix)):

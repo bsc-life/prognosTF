@@ -142,8 +142,13 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
                                  and a != b
                                  and lower < abs(a[1] - b[1]) <= upper)
 
-        pairs = ((a, b) for a in bin_coordinate1 for b in bin_coordinate2
-                 if test(a, b))
+        if same:  # we want only one side
+            pairs = ((a, b) for i, a in enumerate(bin_coordinate1, 1)
+                     for b in bin_coordinate2[i:]
+                     if test(a, b))
+        else:
+            pairs = ((a, b) for a in bin_coordinate1 for b in bin_coordinate2
+                     if test(a, b))
 
         # Sort pairs of coordinates according to genomic position of the
         # smallest of each pair, and store it into a new list
