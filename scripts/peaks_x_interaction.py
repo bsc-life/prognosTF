@@ -102,12 +102,12 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
     peaks2.seek(0)
     npeaks2 = sum(1 for _ in peaks2)
 
-    printime('Total of different bin coordinates in {}:'.format(
+    printime('Total of different/usable peak bin coordinates in {}:'.format(
         peak_files[0]))
     printime(('   - {} (out of {})').format(
         len(bin_coordinate1), npeaks1))
     if not same:
-        printime('Total of different bin coordinates in {}:'.format(
+        printime('Total of different/usable peak bin coordinates in {}:'.format(
             peak_files[1]))
         printime(('   - {} (out of {})').format(
             len(bin_coordinate2), npeaks2))
@@ -135,6 +135,10 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
             test = lambda a, b: (a[0] == b[0]
                                  and wsp <= abs(b[1] - a[1]) <= mdr
                                  and a != b)
+        elif window == 'all':
+            test = lambda a, b: ((a[0] == b[0]
+                                  and wsp <= abs(b[1] - a[1]) <= mdr
+                                  and a != b) or (a[0] != b[0] and a != b))
         else:
             lower, upper = window
             test = lambda a, b: (a[0] == b[0]
@@ -252,8 +256,8 @@ def main():
     mkdir(tmpdir)
 
     windows = [[int(x) / resolution for x in win.split('-')]
-               if win not in  ['inter', 'intra'] else win for win in windows]
-    if 'intra' not in windows and 'inter' not in windows:
+               if win not in  ['inter', 'intra', 'all'] else win for win in windows]
+    if 'intra' not in windows and 'inter' not in windows  and 'all' not in windows:
         for b, e in windows:
             if b >= e:
                 raise Exception('ERROR: begining of windows should be smaller '
@@ -310,7 +314,10 @@ def main():
     sqr_nrm = defaultdict(float)
     passage = defaultdict(int)
     fhandler = open(os.path.join(outdir, 'final_per_cell_sorted.tsv'))
-    line = next(fhandler)
+    try:
+        line = next(fhandler)
+    except StopIteration:
+        raise Exception("ERROR: no peak-pairs matching request")
 
     c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
     prev = group
@@ -391,8 +398,9 @@ def get_options():
                         intervals to check: "-w 1000000-2000000 2000000-5000000"
                         correspond to 2 window intervals, one from 1Mb to 2Mb
                         and one from 2Mb to 5Mb. Use "-w inter" for
-                        inter-chromosomal regions, or "-w intra" for
-                        intra-chromosomal (whithout distance restriction)''')
+                        inter-chromosomal regions, "-w intra" for
+                        intra-chromosomal, "-w all" for all combinations
+                        (whithout distance restriction)''')
     parser.add_argument('--first_is_feature', dest='first_is_feature', default=False,
                         action='store_true', help='''When 2 BED files are input,
                         the peaks in the first BED should be also considered as
