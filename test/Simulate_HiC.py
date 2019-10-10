@@ -17,7 +17,7 @@ from numpy.random  import negative_binomial
 from matplotlib    import pyplot as plt
 
 
-QUICK = True
+QUICK = False
 
 def load_genome(chroms):
     sections = {}
@@ -36,27 +36,27 @@ def load_genome(chroms):
 
 def main():
     # some hardcoded defaults of course....
-    seed_num = 1
+    seed_num = 7
     if QUICK:
         nrnd = 100
     else:
-        nrnd = 10000000
+        nrnd = 1000000
 
     bin_prob = 0.005
 
-    # probability that an interaction comes from a loop
     reso = 10000
 
     if QUICK:
         chroms = OrderedDict([('1', 50), ('2', 30)])
         npeaks = 8
+        # probability that an interaction comes from a loop
         loop_prob = 1
     else:
         chroms = OrderedDict([('1', 500), ('2', 300), ('3', 200)])
-        npeaks = 40
+        npeaks = 20
+        # probability that an interaction comes from a loop
         loop_prob = 0.5
-
-    ###############
+    #############################################
 
 
     genome_size = sum(chroms.values())
@@ -124,8 +124,6 @@ def main():
         loops = set()
         for bin1 in peaks1:
             for bin2 in peaks2:
-                # if random() < 0.1:
-                #     continue
                 loops.add((bin1, bin2))
                 loops.add((bin2, bin1))
 
@@ -193,7 +191,7 @@ def main():
     if QUICK:
         plt.figure(figsize=(10, 7))
     else:
-        plt.figure(figsize=(41, 30))
+        plt.figure(figsize=(61, 45))
     plt.imshow(np.log2(matrix), interpolation='None', origin='lower')
 
     total = 0
@@ -206,27 +204,29 @@ def main():
         total += chroms[k]
         ys.append(total)
 
-    plt.plot(xs, ys, color='k')
-    plt.plot(ys, xs, color='k')
+    plt.plot(xs, ys, color='k', ls='--')
+    plt.plot(ys, xs, color='k', ls='--')
     plt.plot([0, total], [0, total], color='k', alpha=0.5)
 
-    for p in peaks1:
-        plt.axvline(p, color='r', alpha=0.3)
-        plt.axhline(p, color='r', alpha=0.3)
+    plt.hlines(list(peaks1), 0, list(peaks1), colors='r')
+    plt.vlines(list(peaks1), list(peaks1), len(matrix), colors='r')
 
-    for p in peaks2:
-        plt.axvline(p, color='b', alpha=0.3)
-        plt.axhline(p, color='b', alpha=0.3)
+    plt.hlines(list(peaks2), 0, list(peaks2), colors='b')
+    plt.vlines(list(peaks2), list(peaks2), len(matrix), colors='b')
 
-    for i in range(len(matrix)):
-        for j in range(i, len(matrix)):
-            if matrix[i][j]:
-                plt.text(i, j, matrix[i][j])
+    for p1 in peaks:
+        for p2 in peaks:
+            if p1 >= p2:
+                continue
+            if (p1 in peaks1 and p2 in peaks2) or (p1 in peaks2 and p2 in peaks1):
+                plt.text(p1, p2, matrix[p1][p2], size=6)
+            else:
+                plt.text(p1, p2, matrix[p1][p2], size=6, color='white')
 
     plt.xlim(0, total)
     plt.ylim(0, total)
     plt.colorbar()
-    plt.savefig('data/matrix.png')
+    plt.savefig('data/matrix.pdf', format='pdf')
 
     print('Saving BEDs')
     out = open('data/peaks_protA.bed', 'w')

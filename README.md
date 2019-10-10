@@ -2,23 +2,23 @@
 
 ## Requirements
 
- - TADbit
  - scipy
  - numpy
+ 
+### optional
+
+ - TADbit to convert from TADbit BAM format to required
+ - matplotlib to plot and check the result of tests
 
 ## Generate sub-matrices at a given resolution 
 
 We will need sub-matrices from which we will extract sub-matrices.
 
 To run it we need:
-- bam file.
-- resolution
-- tmp directory to store the preprocessed files.
-- output directory to store the results
-- biases (in my case is a pickle file, as the output from tadbit using oneD biases), so if you want to use another one you should modify it.
+- Genomic interactions in four column format (see bellow)
+- one or two lists of coordinates
 
-And we generate:
-- matrices per chromosome: folder where the matrices per chromosome are located. The format is the following:
+The genomic matrices are in the form:
 ```
     388761 388761 364 0.461182349185
     388761 388762 66 0.166867406676
@@ -30,6 +30,17 @@ And we generate:
     - Third column: raw count
     - Fourth column: normalized count
 
+
+
+- resolution
+- tmp directory to store the pre-processed files.
+- output directory to store the results
+
+
+- biases (in my case is a pickle file, as the output from TADbit using oneD biases), so if you want to use another one you should modify it.
+
+And we generate:
+- matrices per chromosome: folder where the matrices per chromosome are located. The format is the following:
 Creation of such matrices with `bam2count.py`.
 
 **Notice** that the chromosome 1 goes from bin 0 to (length of chromosome 1) / resolution, and chromosome 2 goes from the (length of chromosome 1) / resolution + 1,  until (length of chromosome 1) / resolution + 1 + (length of chromosome 2) / resolution. Example: chromosome 1 (length 10), chromosome 2 (length 5)

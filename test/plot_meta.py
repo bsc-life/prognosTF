@@ -16,7 +16,7 @@ plt.imshow(np.log2(matrix), origin='lower')
 for i in range(len(matrix)):
     for j in range(len(matrix)):
         if matrix[i][j]:
-            plt.text(j, i, matrix[i][j])
+            plt.text(j, i, matrix[i][j], ha='center', va='center', size=6)
 
 plt.colorbar()
 
@@ -27,7 +27,7 @@ plt.imshow(np.log2(matrix), origin='lower')
 for i in range(len(matrix)):
     for j in range(len(matrix)):
         if matrix[i][j]:
-            plt.text(j, i, matrix[i][j])
+            plt.text(j, i, matrix[i][j], ha='center', va='center', size=6)
 
 plt.colorbar()
 
