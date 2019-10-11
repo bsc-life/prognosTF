@@ -240,7 +240,7 @@ def main():
     inbam        = opts.inbam
     resolution   = opts.resolution
     peak_files   = opts.peak_files
-    outdir       = opts.outdir
+    outfile      = opts.outfile
     windows_span = opts.windows_span
     max_dist     = opts.max_dist
     windows      = opts.windows
@@ -250,9 +250,9 @@ def main():
     biases       = opts.biases
     tmpdir       = opts.tmpdir
     if not tmpdir:
-        tmpdir = os.path.join(outdir, 'tmp')
+        tmpdir = os.path.join(os.path.split(outfile)[0], 'tmp')
 
-    mkdir(outdir)
+    mkdir(os.path.split(outfile)[0])
     mkdir(tmpdir)
 
     windows = [[int(x) / resolution for x in win.split('-')]
@@ -286,7 +286,7 @@ def main():
 
     proc = Popen(("sort -k9 -S 10% --parallel={0} "
                   "--temporary-directory={1} -o {2}").format(
-                      ncpus, tmpdir, os.path.join(outdir, 'final_per_cell_sorted.tsv')),
+                      ncpus, tmpdir, os.path.join(tmpdir, 'final_per_cell_sorted.tsv')),
                  shell=True, stdin=PIPE)
 
     groups = defaultdict(int)
@@ -313,7 +313,7 @@ def main():
     sum_nrm = defaultdict(float)
     sqr_nrm = defaultdict(float)
     passage = defaultdict(int)
-    fhandler = open(os.path.join(outdir, 'final_per_cell_sorted.tsv'))
+    fhandler = open(os.path.join(tmpdir, 'final_per_cell_sorted.tsv'))
     try:
         line = next(fhandler)
     except StopIteration:
@@ -322,7 +322,7 @@ def main():
     c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
     prev = group
     fhandler.seek(0)
-    out = open(os.path.join(outdir, 'final_sum.pickle'), 'wb')
+    out = open(outfile, 'wb')
     for line in fhandler:
         c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
         if group != prev:
@@ -383,8 +383,8 @@ def get_options():
     parser.add_argument('-r', '--resolution', dest='resolution', required=True,
                         metavar='INT', default=False, type=int,
                         help='wanted resolution from generated matrix')
-    parser.add_argument('-o', '--outdir', dest='outdir', default='',
-                        metavar='PATH', help='output directory')
+    parser.add_argument('-o', '--outfile', dest='outfile', default='',
+                        metavar='PATH', help='path to output file (pickle format)')
     parser.add_argument('-s', dest='windows_span', required=True, type=int,
                         metavar='INT',
                         help='''Windows span around center of the peak (in bins; the

@@ -9,6 +9,7 @@ except ImportError:
     from fractions import gcd
 from subprocess    import Popen
 from functools     import reduce
+from pickle        import dump
 
 import numpy as np
 
@@ -214,19 +215,38 @@ def main():
     plt.hlines(list(peaks2), 0, list(peaks2), colors='b')
     plt.vlines(list(peaks2), list(peaks2), len(matrix), colors='b')
 
+    # for p1 in peaks:
+    #     for p2 in peaks:
+    #         if p1 >= p2:
+    #             continue
+    #         if (p1 in peaks1 and p2 in peaks2) or (p1 in peaks2 and p2 in peaks1):
+    #             plt.text(p1, p2, matrix[p1][p2], size=6)
+    #         else:
+    #             plt.text(p1, p2, matrix[p1][p2], size=6, color='white')
+
     for p1 in peaks:
         for p2 in peaks:
             if p1 >= p2:
                 continue
-            if (p1 in peaks1 and p2 in peaks2) or (p1 in peaks2 and p2 in peaks1):
-                plt.text(p1, p2, matrix[p1][p2], size=6)
-            else:
-                plt.text(p1, p2, matrix[p1][p2], size=6, color='white')
+            if not ((p1 in peaks1 and p2 in peaks2) or
+                    (p1 in peaks2 and p2 in peaks1)):
+                continue
+            for k in range(9):
+                for l in range(9):
+                    plt.text(p1 + k - 4, p2 + l - 4,
+                             matrix[p1 + k - 4][p2 + l - 4],
+                             size=2, va='center', ha='center')
+
 
     plt.xlim(0, total)
     plt.ylim(0, total)
     plt.colorbar()
     plt.savefig('data/matrix.pdf', format='pdf')
+
+    print('saving matrix as pickle')
+    out = open('data/matrix.pickle', 'w')
+    dump(matrix, out)
+    out.close()
 
     print('Saving BEDs')
     out = open('data/peaks_protA.bed', 'w')
