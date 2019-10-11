@@ -91,11 +91,11 @@ def binning_bed(peak_files, resolution, windows_span, max_dist,
 
     peaks1.seek(0)  # needs to be here in case peaks1 and peak2 are the same
     bin_coordinate1 = set((c, p, f) for c, p, f in map(read_line1, peaks1)
-                          if windows_span <= p <= max_chrom[c])
+                          if c in max_chrom and windows_span <= p <= max_chrom[c])
 
     peaks2.seek(0)  # needs to be here in case peaks1 and peak2 are the same
     bin_coordinate2 = set((c, p, f) for c, p, f in map(read_line2, peaks2)
-                          if windows_span <= p <= max_chrom[c])
+                          if c in max_chrom and windows_span <= p <= max_chrom[c])
 
     peaks1.seek(0)
     npeaks1 = sum(1 for _ in peaks1)
