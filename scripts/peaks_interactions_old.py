@@ -32,27 +32,11 @@ def printime(msg):
            ']')
 
 
-def chromosome_from_bam(inbam, resolution):
-    ## peaks file sorted per chromosome
-    bamfile = AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references, [x // resolution + 1
-                                                    for x in bamfile.lengths]))
-    total = 0
-    section_pos = dict()
-    bins = {}
-    for crm in sections:
-        section_pos[crm] = (total, total + sections[crm])
-        for n, i in enumerate(range(*section_pos[crm])):
-            bins[i] = (crm, n)
-        total += sections[crm]
-
-    chrom_sizes = OrderedDict(zip(bamfile.references,
-                                  [x for x in bamfile.lengths]))
-
-    return section_pos, chrom_sizes, bins
-
-
-def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
+def binning_bed(peak_files, resolution, windows_span, max_dist,
+                chrom_sizes, windows, in_feature, section_pos, badcols):
+    '''
+    Input BED file(s) of ChIP peaks and bin into desired resolution of Hi-C
+    '''
 
     def read_line_feature(line):
         '''
@@ -130,75 +114,7 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
 
     # sort peaks
     bin_coordinate1 = sorted(bin_coordinate1)
-    if same:
-        bin_coordinate2 = bin_coordinate1
-    else:
-        bin_coordinate2 = sorted(bin_coordinate2)
-
-    return bin_coordinate1, bin_coordinate2
-
-
-def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
-                   max_dist, window, section_pos):
-
-    wsp = (windows_span * 2) + 1
-    mdr = max_dist / resolution
-
-    printime('- Generating pairs of coordinates...')
-    # put pairs in intervals
-    if window == 'inter':
-        test = lambda a, b: (a[0] != b[0]
-                             and a != b)
-    elif window == 'intra':
-        test = lambda a, b: (a[0] == b[0]
-                             and wsp <= abs(b[1] - a[1]) <= mdr
-                             and a != b)
-    elif window == 'all':
-        test = lambda a, b: ((a[0] == b[0]
-                              and wsp <= abs(b[1] - a[1]) <= mdr
-                              and a != b) or (a[0] != b[0] and a != b))
-    else:
-        lower, upper = window
-        test = lambda a, b: (a[0] == b[0]
-                             and wsp <= abs(b[1] - a[1]) <= mdr
-                             and a != b
-                             and lower < abs(a[1] - b[1]) <= upper)
-
-    if bin_coordinate1 is bin_coordinate2:  # we want only one side
-        pairs = ((a, b) for i, a in enumerate(bin_coordinate1, 1)
-                 for b in bin_coordinate2[i:]
-                 if test(a, b))
-    else:
-        pairs = ((a, b) for a in bin_coordinate1 for b in bin_coordinate2
-                 if test(a, b))
-
-    # Sort pairs of coordinates according to genomic position of the
-    # smallest of each pair, and store it into a new list
-    final_pairs = []
-    for (chr1, bs1, f1), (chr2, bs2, f2) in pairs:
-        pos1 = section_pos[chr1][0] + bs1
-        pos2 = section_pos[chr2][0] + bs2
-
-        beg1 = pos1 - windows_span
-        end1 = pos1 + windows_span + 1
-        beg2 = pos2 - windows_span
-        end2 = pos2 + windows_span + 1
-
-        if beg1 > beg2:
-            beg1, end1, beg2, end2 = beg2, end2, beg1, end1
-
-        what = f1 + f2
-        final_pairs.append((beg1, end1, beg2, end2, what))
-
-    final_pairs.sort()
-
-    return final_pairs
-
-
-def submatrix_coordinates(final_pairs, badcols, wsp):
-    '''
-    Input BED file(s) of ChIP peaks and bin into desired resolution of Hi-C
-    '''
+    bin_coordinate2 = sorted(bin_coordinate2)
 
     # get all combinations of bin peaks:
     # - same chromosomes
@@ -206,36 +122,87 @@ def submatrix_coordinates(final_pairs, badcols, wsp):
     # - below max_dist
     # - Different combination of the features
 
+    wsp = (windows_span * 2) + 1
+    mdr = max_dist / resolution
 
-    # in buf we store a list of coordinates to be yielded
-    # when buf spans for twice the window span we sort it and empty it
-    buf = []
-    buf_beg = 0
-    for beg1, end1, beg2, end2, what in final_pairs:
+    printime('- Generating pairs of coordinates...')
+    # put pairs in intervals
+    for window in windows:
+        if window == 'inter':
+            test = lambda a, b: (a[0] != b[0]
+                                 and a != b)
+        elif window == 'intra':
+            test = lambda a, b: (a[0] == b[0]
+                                 and wsp <= abs(b[1] - a[1]) <= mdr
+                                 and a != b)
+        elif window == 'all':
+            test = lambda a, b: ((a[0] == b[0]
+                                  and wsp <= abs(b[1] - a[1]) <= mdr
+                                  and a != b) or (a[0] != b[0] and a != b))
+        else:
+            lower, upper = window
+            test = lambda a, b: (a[0] == b[0]
+                                 and wsp <= abs(b[1] - a[1]) <= mdr
+                                 and a != b
+                                 and lower < abs(a[1] - b[1]) <= upper)
 
-        range1 = [(x, p1) for x, p1 in enumerate(range(beg1, end1))
-                  if p1 not in badcols]
-        range2 = [(y, p2) for y, p2 in enumerate(range(beg2, end2))
-                  if p2 not in badcols]
+        if same:  # we want only one side
+            pairs = ((a, b) for i, a in enumerate(bin_coordinate1, 1)
+                     for b in bin_coordinate2[i:]
+                     if test(a, b))
+        else:
+            pairs = ((a, b) for a in bin_coordinate1 for b in bin_coordinate2
+                     if test(a, b))
 
-        if not range1 or not range2:
-            continue
+        # Sort pairs of coordinates according to genomic position of the
+        # smallest of each pair, and store it into a new list
+        final_pairs = []
+        for (chr1, bs1, f1), (chr2, bs2, f2) in pairs:
+            pos1 = section_pos[chr1][0] + bs1
+            pos2 = section_pos[chr2][0] + bs2
 
-        for x, p1 in range1:
-            for y, p2 in range2:
-                buf.append(((p1, p2), x, y, what))
+            beg1 = pos1 - windows_span
+            end1 = pos1 + windows_span + 1
+            beg2 = pos2 - windows_span
+            end2 = pos2 + windows_span + 1
 
-        if end1 - buf_beg > wsp:
-            buf.sort()
-            top = end1 - wsp
-            p1 = min(buf)[0][0]
-            while p1 < top:
-                (p1, p2), x, y, what = buf.pop(0)
-                yield (p1, p2), x, y, what
-            buf_beg = p1
-    buf.sort()
-    while buf:
-        yield buf.pop(0)
+            if beg1 > beg2:
+                beg1, end1, beg2, end2 = beg2, end2, beg1, end1
+
+            what = f1 + f2
+            final_pairs.append((beg1, end1, beg2, end2, what))
+
+        final_pairs.sort()
+
+        # in buf we store a list of coordinates to be yielded
+        # when buf spans for twice the window span we sort it and empty it
+        buf = []
+        buf_beg = 0
+        for beg1, end1, beg2, end2, what in final_pairs:
+
+            range1 = [(x, p1) for x, p1 in enumerate(range(beg1, end1))
+                      if p1 not in badcols]
+            range2 = [(y, p2) for y, p2 in enumerate(range(beg2, end2))
+                      if p2 not in badcols]
+
+            if not range1 or not range2:
+                continue
+
+            for x, p1 in range1:
+                for y, p2 in range2:
+                    buf.append(((p1, p2), x, y, what))
+
+            if end1 - buf_beg > wsp:
+                buf.sort()
+                top = end1 - wsp
+                p1 = min(buf)[0][0]
+                while p1 < top:
+                    (p1, p2), x, y, what = buf.pop(0)
+                    yield (p1, p2), x, y, what
+                buf_beg = p1
+        buf.sort()
+        while buf:
+            yield buf.pop(0)
 
 
 def readfiles(genomic_file, iter_pairs):
@@ -276,7 +243,7 @@ def main():
     outfile      = opts.outfile
     windows_span = opts.windows_span
     max_dist     = opts.max_dist
-    window       = opts.window
+    windows      = opts.windows
     genomic_mat  = opts.genomic_mat
     ncpus        = opts.ncpus
     in_feature   = opts.first_is_feature
@@ -288,36 +255,42 @@ def main():
     mkdir(os.path.split(outfile)[0])
     mkdir(tmpdir)
 
-    window_name = window
-    if window not in  ['inter', 'intra', 'all']:
-        window = [int(x) / resolution for x in window.split('-')]
+    windows = [[int(x) / resolution for x in win.split('-')]
+               if win not in  ['inter', 'intra', 'all'] else win for win in windows]
+    if 'intra' not in windows and 'inter' not in windows  and 'all' not in windows:
+        for b, e in windows:
+            if b >= e:
+                raise Exception('ERROR: begining of windows should be smaller '
+                                'than end')
 
-    if window not in  ['inter', 'intra', 'all']:
-        if window[0] >= window[1]:
-            raise Exception('ERROR: begining of window should be smaller '
-                            'than end')
+    ## peaks file sorted per chromosome
+    bamfile = AlignmentFile(inbam, 'rb')
+    sections = OrderedDict(zip(bamfile.references, [x // resolution + 1
+                                                    for x in bamfile.lengths]))
+    total = 0
+    section_pos = dict()
+    bins = {}
+    for crm in sections:
+        section_pos[crm] = (total, total + sections[crm])
+        for n, i in enumerate(range(*section_pos[crm])):
+            bins[i] = (crm, n)
+        total += sections[crm]
+
+    chrom_sizes = OrderedDict(zip(bamfile.references,
+                                  [x for x in bamfile.lengths]))
 
     badcols = load(open(biases))['badcol']
 
-    section_pos, chrom_sizes, bins = chromosome_from_bam(inbam, resolution)
-
-    bin_coord1, bin_coord2 = parse_peaks(peak_files, resolution, in_feature,
-                                         chrom_sizes, windows_span)
-
-
-    groups = defaultdict(int)
-    window_name = window if isinstance(window, str) else '-'.join(map(str, window))
-    printime('Window {}'.format(window_name))
-    pairs = generate_pairs(bin_coord1, bin_coord2, resolution, windows_span,
-                           max_dist, window, section_pos)
-
-    iter_pairs = submatrix_coordinates(pairs, badcols, (windows_span * 2) + 1)
+    # get all lists... we assume that that will be ordered as wanted
+    iter_pairs = binning_bed(peak_files, resolution, windows_span, max_dist,
+                             chrom_sizes, windows, in_feature, section_pos, badcols)
 
     proc = Popen(("sort -k9 -S 10% --parallel={0} "
-                  "--temporary-directory={1} -o final_per_cell_sorted.tsv").format(
-                      ncpus, tmpdir, os.path.join(tmpdir)),
+                  "--temporary-directory={1} -o {2}").format(
+                      ncpus, tmpdir, os.path.join(tmpdir, 'final_per_cell_sorted.tsv')),
                  shell=True, stdin=PIPE)
 
+    groups = defaultdict(int)
     for X, Y, x, y, raw, nrm, group in readfiles(genomic_mat, iter_pairs):
         c1, b1 = bins[X]
         c2, b2 = bins[Y]
@@ -334,7 +307,6 @@ def main():
     proc.stdin.close()
     proc.wait()
 
-
     printime('Summing peaks')
     # initialize defaultdict and prev variable
     sum_raw = defaultdict(int)
@@ -342,22 +314,16 @@ def main():
     sum_nrm = defaultdict(float)
     sqr_nrm = defaultdict(float)
     passage = defaultdict(int)
-    fhandler = open(os.path.join(
-        tmpdir, 'final_per_cell_sorted.tsv'))
+    fhandler = open(os.path.join(tmpdir, 'final_per_cell_sorted.tsv'))
     try:
         line = next(fhandler)
     except StopIteration:
         raise Exception("ERROR: no peak-pairs matching request")
 
-
     c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
     prev = group
     fhandler.seek(0)
     out = open(outfile, 'wb')
-
-    metadata = {'groups': groups, 'window': window, 'resolution': resolution}
-    dump(metadata, out, protocol=HIGHEST_PROTOCOL)
-
     for line in fhandler:
         c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
         if group != prev:
@@ -391,6 +357,14 @@ def main():
 def get_options():
     parser = ArgumentParser()
 
+    windows = ('255000-1000000',
+               '1000000-2500000',
+               '2500000-5000000',
+               '5000000-10000000',
+               '10000000-15000000',
+               '15000000-20000000',
+               '20000000-30000000')
+
     parser.add_argument('--peaks', dest='peak_files', required=True,
                         nargs="+", metavar='PATH',
                         help='''one or two pairwise peaks files to
@@ -419,12 +393,13 @@ def get_options():
     parser.add_argument('-m', '--max_dist', dest='max_dist', metavar='INT',
                         default=float('inf'), type=int,
                         help='''[%(default)s] Max dist between center peaks''')
-    parser.add_argument('-w', '--window', dest='window', required=False,
-                        default='intra', metavar='INT-INT', type=str,
+    parser.add_argument('-w', '--windows', dest='windows', required=False,
+                        default=windows, metavar='INT-INT', type=str, nargs="+",
                         help='''[%(default)s] If only interested in some
-                        intervals to check: "-w 1000000-2000000"
-                        correspond to the window interval, from 1Mb to 2Mb.
-                        Use "-w inter" for inter-chromosomal regions, "-w intra" for
+                        intervals to check: "-w 1000000-2000000 2000000-5000000"
+                        correspond to 2 window intervals, one from 1Mb to 2Mb
+                        and one from 2Mb to 5Mb. Use "-w inter" for
+                        inter-chromosomal regions, "-w intra" for
                         intra-chromosomal, "-w all" for all combinations
                         (whithout distance restriction)''')
     parser.add_argument('--first_is_feature', dest='first_is_feature', default=False,
