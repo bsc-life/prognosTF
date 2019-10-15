@@ -7,7 +7,7 @@ from argparse    import ArgumentParser
 from collections import OrderedDict, defaultdict
 from datetime    import datetime
 from time        import time
-from pickle      import load, dump, HIGHEST_PROTOCOL
+from pickle      import load, dump, HIGHEST_PROTOCOL, _Unpickler
 from subprocess  import Popen, PIPE
 
 import os
@@ -17,6 +17,7 @@ from pysam       import AlignmentFile
 
 
 def mkdir(dnam):
+    dnam = os.path.abspath(dnam)
     try:
         os.mkdir(dnam)
     except OSError as exc:
@@ -24,7 +25,9 @@ def mkdir(dnam):
             raise
 
 
-def printime(msg):
+def printime(msg, silent=True):
+    if silent:
+        return
     print (msg +
            (' ' * (79 - len(msg.replace('\n', '')))) +
            '[' +
@@ -32,7 +35,7 @@ def printime(msg):
            ']')
 
 
-def chromosome_from_bam(inbam, resolution):
+def chromosome_from_bam(inbam, resolution, get_bins=False):
     ## peaks file sorted per chromosome
     bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references, [x // resolution + 1
@@ -42,8 +45,9 @@ def chromosome_from_bam(inbam, resolution):
     bins = {}
     for crm in sections:
         section_pos[crm] = (total, total + sections[crm])
-        for n, i in enumerate(range(*section_pos[crm])):
-            bins[i] = (crm, n)
+        if get_bins:
+            for n, i in enumerate(range(*section_pos[crm])):
+                bins[i] = (crm, n)
         total += sections[crm]
 
     chrom_sizes = OrderedDict(zip(bamfile.references,
@@ -59,21 +63,21 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
         Get information per peak of a feature +/-
         '''
         c, p1, p2, f = line.split()[:4]
-        return c, (int(p1) + int(p2)) / 2 / resolution, f
+        return c, (int(p1) + int(p2)) // 2 // resolution, f
 
     def read_line_no_feature(line):
         '''
         Get information per peak
         '''
         c, p1, p2 = line.split()[:3]
-        return c, (int(p1) + int(p2)) / 2 / resolution, ''
+        return c, (int(p1) + int(p2)) // 2 // resolution, ''
 
     def read_line_no_feature_but(line):
         '''
         Get information per peak
         '''
         c, p1, p2 = line.split()[:3]
-        return c, (int(p1) + int(p2)) / 2 / resolution, '{}:{}-{}'.format(c, p1, p2)
+        return c, (int(p1) + int(p2)) // 2 // resolution, '{}:{}-{}'.format(c, p1, p2)
 
     peaks1 = open(peak_files[0], "r")
     try:
@@ -83,7 +87,7 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
         same = True
         peaks2 = peaks1
 
-    # findout if bed file contain features, or only coordinates
+    # find out if bed file contain features, or only coordinates
     line = next(peaks1)
     try:
         read_line_feature(line)
@@ -118,16 +122,6 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
     peaks2.seek(0)
     npeaks2 = sum(1 for _ in peaks2)
 
-    printime('Total of different/usable peak bin coordinates in {}:'.format(
-        peak_files[0]))
-    printime(('   - {} (out of {})').format(
-        len(bin_coordinate1), npeaks1))
-    if not same:
-        printime('Total of different/usable peak bin coordinates in {}:'.format(
-            peak_files[1]))
-        printime(('   - {} (out of {})').format(
-            len(bin_coordinate2), npeaks2))
-
     # sort peaks
     bin_coordinate1 = sorted(bin_coordinate1)
     if same:
@@ -135,7 +129,7 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
     else:
         bin_coordinate2 = sorted(bin_coordinate2)
 
-    return bin_coordinate1, bin_coordinate2
+    return bin_coordinate1, bin_coordinate2, npeaks1, npeaks2, same
 
 
 def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
@@ -144,7 +138,6 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
     wsp = (windows_span * 2) + 1
     mdr = max_dist / resolution
 
-    printime('- Generating pairs of coordinates...')
     # put pairs in intervals
     if window == 'inter':
         test = lambda a, b: (a[0] != b[0]
@@ -212,7 +205,6 @@ def submatrix_coordinates(final_pairs, badcols, wsp):
     buf = []
     buf_beg = 0
     for beg1, end1, beg2, end2, what in final_pairs:
-
         range1 = [(x, p1) for x, p1 in enumerate(range(beg1, end1))
                   if p1 not in badcols]
         range2 = [(y, p2) for y, p2 in enumerate(range(beg2, end2))
@@ -244,7 +236,6 @@ def readfiles(genomic_file, iter_pairs):
         return (int(a), int(b)), c, d
 
     # create empty meta-waffles
-    printime(' - Reading genomic matrix and peaks')
     fh1 = open(genomic_file)
     pos1, raw, nrm = split_line1(next(fh1))
     pos2, x, y, e = next(iter_pairs)
@@ -264,7 +255,43 @@ def readfiles(genomic_file, iter_pairs):
                 pos2, x, y, e = next(iter_pairs)
     except StopIteration:
         fh1.close()
-    printime(' - Finished extracting')
+
+
+def interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins):
+    def _write_submatrices(X, Y, x, y, raw, nrm, group):
+        c1, b1 = bins[X]
+        c2, b2 = bins[Y]
+        out.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+            c1, b1, c2, b2, x, y, raw, nrm, group))
+
+    if bins:
+        out = open(submatrices, 'w')
+        do_the_thing = _write_submatrices
+    else:
+        do_the_thing = lambda a, b, c, d, e, f, g: None
+
+    groups = {}
+    for X, Y, x, y, raw, nrm, group in readfiles(genomic_mat, iter_pairs):
+        try:
+            groups[group]['counter'] += 1
+        except KeyError:
+            groups[group] = {
+                'counter' : 1,
+                'sum_raw' : defaultdict(int),
+                'sqr_raw' : defaultdict(int),
+                'sum_nrm' : defaultdict(float),
+                'sqr_nrm' : defaultdict(float),
+                'passage' : defaultdict(int)}
+        groups[group]['sum_raw'][x, y] += raw
+        groups[group]['sqr_raw'][x, y] += raw**2
+        groups[group]['sum_nrm'][x, y] += nrm
+        groups[group]['sqr_nrm'][x, y] += nrm**2
+        groups[group]['passage'][x, y] += 1
+        do_the_thing(X, Y, x, y, raw, nrm, group)
+
+    if bins:
+        out.close()
+    return groups
 
 
 def main():
@@ -281,111 +308,53 @@ def main():
     ncpus        = opts.ncpus
     in_feature   = opts.first_is_feature
     biases       = opts.biases
-    tmpdir       = opts.tmpdir
-    if not tmpdir:
-        tmpdir = os.path.join(os.path.split(outfile)[0], 'tmp')
-
-    mkdir(os.path.split(outfile)[0])
-    mkdir(tmpdir)
+    submatrices  = opts.submatrices
+    silent       = opts.silent
+    badcols      = _Unpickler(open(biases, "rb"), encoding='latin1').load()['badcol']
 
     window_name = window
     if window not in  ['inter', 'intra', 'all']:
         window = [int(x) / resolution for x in window.split('-')]
-
-    if window not in  ['inter', 'intra', 'all']:
         if window[0] >= window[1]:
-            raise Exception('ERROR: begining of window should be smaller '
+            raise Exception('ERROR: beginning of window should be smaller '
                             'than end')
 
-    badcols = load(open(biases))['badcol']
+    mkdir(os.path.split(outfile)[0])
 
-    section_pos, chrom_sizes, bins = chromosome_from_bam(inbam, resolution)
+    # get chromosome coordinates and conversor genomic coordinate to bins
+    section_pos, chrom_sizes, bins = chromosome_from_bam(
+        inbam, resolution, get_bins=True if submatrices else False)
 
-    bin_coord1, bin_coord2 = parse_peaks(peak_files, resolution, in_feature,
-                                         chrom_sizes, windows_span)
+    # define pairs of peaks
+    peak_coord1, peak_coord2, npeaks1, npeaks2, same = parse_peaks(
+        peak_files, resolution, in_feature, chrom_sizes, windows_span)
+    printime('Total of different/usable peak bin coordinates in {}:'.format(
+        peak_files[0]), silent)
+    printime(('   - {} (out of {})').format(
+        len(peak_coord1), npeaks1), silent)
+    if not same:
+        printime('Total of different/usable peak bin coordinates in {}:'.format(
+            peak_files[1]), silent)
+        printime(('   - {} (out of {})').format(
+            len(peak_coord2), npeaks2), silent)
 
+    printime('- Generating pairs of coordinates...', silent)
+    pair_peaks = generate_pairs(peak_coord1, peak_coord2, resolution,
+                                windows_span, max_dist, window, section_pos)
 
-    groups = defaultdict(int)
-    window_name = window if isinstance(window, str) else '-'.join(map(str, window))
-    printime('Window {}'.format(window_name))
-    pairs = generate_pairs(bin_coord1, bin_coord2, resolution, windows_span,
-                           max_dist, window, section_pos)
+    iter_pairs = submatrix_coordinates(pair_peaks, badcols, (windows_span * 2) + 1)
 
-    iter_pairs = submatrix_coordinates(pairs, badcols, (windows_span * 2) + 1)
+    # retrieve interactions at peak pairs using genomic matrix
+    # sum them by feature and store them in dictionary
+    printime(' - Reading genomic matrix and peaks', silent)
+    groups = interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins)
+    printime(' - Finished extracting', silent)
 
-    proc = Popen(("sort -k9 -S 10% --parallel={0} "
-                  "--temporary-directory={1} -o final_per_cell_sorted.tsv").format(
-                      ncpus, tmpdir, os.path.join(tmpdir)),
-                 shell=True, stdin=PIPE)
-
-    for X, Y, x, y, raw, nrm, group in readfiles(genomic_mat, iter_pairs):
-        c1, b1 = bins[X]
-        c2, b2 = bins[Y]
-        groups[group] += 1
-        try:
-            proc.stdin.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                c1, b1, c2, b2, x, y, raw, nrm, group))
-        except IOError as e:
-            if e.errno == errno.EPIPE or e.errno == errno.EINVAL:
-                # normal stop
-                break
-            else:
-                raise
-    proc.stdin.close()
-    proc.wait()
-
-
-    printime('Summing peaks')
-    # initialize defaultdict and prev variable
-    sum_raw = defaultdict(int)
-    sqr_raw = defaultdict(int)
-    sum_nrm = defaultdict(float)
-    sqr_nrm = defaultdict(float)
-    passage = defaultdict(int)
-    fhandler = open(os.path.join(
-        tmpdir, 'final_per_cell_sorted.tsv'))
-    try:
-        line = next(fhandler)
-    except StopIteration:
-        raise Exception("ERROR: no peak-pairs matching request")
-
-
-    c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
-    prev = group
-    fhandler.seek(0)
     out = open(outfile, 'wb')
-
-    metadata = {'groups': groups, 'window': window, 'resolution': resolution}
-    dump(metadata, out, protocol=HIGHEST_PROTOCOL)
-
-    for line in fhandler:
-        c1, b1, c2, b2, x, y, raw, nrm, group = line.rstrip('\n').split('\t')
-        if group != prev:
-            dump([prev, (sum_raw, sqr_raw, sum_nrm, sqr_nrm, passage, groups[prev])],
-                 out, protocol=HIGHEST_PROTOCOL)
-            sum_raw = defaultdict(int)
-            sqr_raw = defaultdict(int)
-            sum_nrm = defaultdict(float)
-            sqr_nrm = defaultdict(float)
-            passage = defaultdict(int)
-            prev    = group
-        raw = int(raw)
-        nrm = float(nrm)
-        y = int(y)
-        x = int(x)
-        sum_raw[x, y] += raw
-        sqr_raw[x, y] += raw**2
-        sum_nrm[x, y] += nrm
-        sqr_nrm[x, y] += nrm**2
-        passage[x, y] += 1
-    dump([group, (sum_raw, sqr_raw, sum_nrm, sqr_nrm, passage, groups[group])],
-         out, protocol=HIGHEST_PROTOCOL)
+    dump(groups, out, protocol=HIGHEST_PROTOCOL)
     out.close()
 
-    # clean
-    os.system('rm -rf ' + tmpdir)
-
-    printime('all done!')
+    printime('all done!', silent)
 
 
 def get_options():
@@ -397,7 +366,7 @@ def get_options():
                         compute average submatrix (norm and raw). These files
                         should contain at least two columns, chromosome and
                         position, and may contain an extra column of feature. If
-                        present, the resuilt will be retrurned according to the
+                        present, the result will be returned according to the
                         possible combination of this feature''')
     parser.add_argument('--bam', dest='inbam', required=True,
                         metavar='PATH', help='Input HiC-BAM file')
@@ -412,6 +381,9 @@ def get_options():
                         help='wanted resolution from generated matrix')
     parser.add_argument('-o', '--outfile', dest='outfile', default='',
                         metavar='PATH', help='path to output file (pickle format)')
+    parser.add_argument('--all_submatrices', dest='submatrices', default='',
+                        metavar='PATH', help='''if PATH is provided here, stores
+                        all the individual submatrices generated''')
     parser.add_argument('-s', dest='windows_span', required=True, type=int,
                         metavar='INT',
                         help='''Windows span around center of the peak (in bins; the
@@ -426,17 +398,17 @@ def get_options():
                         correspond to the window interval, from 1Mb to 2Mb.
                         Use "-w inter" for inter-chromosomal regions, "-w intra" for
                         intra-chromosomal, "-w all" for all combinations
-                        (whithout distance restriction)''')
+                        (without distance restriction)''')
     parser.add_argument('--first_is_feature', dest='first_is_feature', default=False,
                         action='store_true', help='''When 2 BED files are input,
                         the peaks in the first BED should be also considered as
                         feature. This is to create average sub-matrices for
                         each peak in the first BED file.''')
+    parser.add_argument('--silent', dest='silent', default=False,
+                        action='store_true', help='''shhhhhhttt''')
     parser.add_argument('-C', '--cpus', dest='ncpus', type=int, default=8,
                         help='''[%(default)s] number of cpus to be used for parsing
                         the HiC-BAM file''')
-    parser.add_argument('-t', '--tmp', dest='tmpdir', default=None,
-                        help='Tmpdir to store coordinates files')
 
     opts = parser.parse_args()
     return opts
