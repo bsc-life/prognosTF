@@ -6,11 +6,20 @@
 from os.path     import split as os_split
 
 from argparse    import ArgumentParser
-from pickle      import dump, HIGHEST_PROTOCOL, _Unpickler
+try:  # python 3
+    from pickle        import dump, HIGHEST_PROTOCOL, _Unpickler as Unpickler
+except ImportError:  # python 2
+    from pickle        import dump, HIGHEST_PROTOCOL, Unpickler
 
-from meta_waffle       import chromosome_from_bam, parse_peaks, generate_pairs
-from meta_waffle       import submatrix_coordinates, interactions_at_intersection
-from meta_waffle.utils import printime, mkdir
+try:
+    from meta_waffle       import chromosome_from_bam, parse_peaks, generate_pairs
+    from meta_waffle       import submatrix_coordinates, interactions_at_intersection
+    from meta_waffle.utils import printime, mkdir
+except ImportError:  # meta-waffle is not installed.. but it's still ok!!!
+    from os.path  import join as os_join
+    from sys.path import insert
+
+    insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
 
 
 def main():
@@ -28,7 +37,7 @@ def main():
     biases       = opts.biases
     submatrices  = opts.submatrices
     silent       = opts.silent
-    badcols      = _Unpickler(open(biases, "rb"), encoding='latin1').load()['badcol']
+    badcols      = Unpickler(open(biases, "rb"), encoding='latin1').load()['badcol']
 
     if window not in  ['inter', 'intra', 'all']:
         window = [int(x) / resolution for x in window.split('-')]
@@ -40,7 +49,7 @@ def main():
 
     # get chromosome coordinates and conversor genomic coordinate to bins
     section_pos, chrom_sizes, bins = chromosome_from_bam(
-        inbam, resolution, get_bins=True if submatrices else False)
+        inbam, resolution, get_bins=submatrices!='')
 
     # define pairs of peaks
     peak_coord1, peak_coord2, npeaks1, npeaks2, same = parse_peaks(
