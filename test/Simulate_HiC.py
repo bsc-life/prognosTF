@@ -11,12 +11,17 @@ from subprocess    import Popen
 from functools     import reduce
 from pickle        import dump
 
+from os.path import join  as os_join
+from os.path import split as os_split
+
 import numpy as np
 
 from numpy.random  import negative_binomial
 
 from matplotlib    import pyplot as plt
 
+
+TEST_PATH = os_split(__file__)[0]
 
 QUICK = False
 
@@ -129,8 +134,8 @@ def main():
                 loops.add((bin2, bin1))
 
     print('generating SAM')
-    Popen('mkdir -p data', shell=True).communicate()
-    out = open('data/fake.sam', 'w')
+    Popen('mkdir -p {}/data'.format(TEST_PATH), shell=True).communicate()
+    out = open(os_join(TEST_PATH, 'data', 'fake.sam'), 'w')
     out.write('@HD\tVN:1.5\tSO:coordinate\n')
     for c in chroms:
         out.write('@SQ\tSN:%s\tLN:%d\n' % (c, chroms[c] * reso - 1))
@@ -176,18 +181,20 @@ def main():
     out.close()
 
     print('generating BAM')
-    Popen('samtools sort -@ 8 -O BAM {} > {}'.format('data/fake.sam',
-                                                     'data/fake.bam'),
+    Popen('samtools sort -@ 8 -O BAM {} > {}'.format(
+        os_join(TEST_PATH, 'data', 'fake.sam'),
+        os_join(TEST_PATH, 'data', 'fake.bam')),
           shell=True).communicate()
-    Popen('rm -f {}'.format('data/fake.sam'), shell=True).communicate()
-    Popen('samtools index -@ 8 {}'.format('data/fake.bam'),
+    Popen('rm -f {}'.format(os_join(TEST_PATH, 'data', 'fake.sam')),
+          shell=True).communicate()
+    Popen('samtools index -@ 8 {}'.format(os_join(TEST_PATH, 'data', 'fake.bam')),
           shell=True).communicate()
 
-    # print('tadbit normalize -w tmp --bam {} -r {}'.format('data/fake.bam', reso)).communicate()
-    Popen('tadbit normalize -w tmp --bam {} -r {} --min_count {}'.format(
-        'data/fake.bam', reso, 0 if QUICK else 100), shell=True).communicate()
-    Popen('mv tmp/04_normalization/biases* data/biases.pickle', shell=True).communicate()
-    Popen('rm -rf tmp', shell=True).communicate()
+    Popen('tadbit normalize -w {}/tmp --bam {} -r {} --min_count {}'.format(
+        TEST_PATH, os_join(TEST_PATH, 'data', 'fake.bam'), reso, 0 if QUICK else 100),
+          shell=True).communicate()
+
+    Popen('rm -rf {}/tmp'.format(TEST_PATH), shell=True).communicate()
 
     if QUICK:
         plt.figure(figsize=(10, 7))
@@ -215,15 +222,6 @@ def main():
     plt.hlines(list(peaks2), 0, list(peaks2), colors='b')
     plt.vlines(list(peaks2), list(peaks2), len(matrix), colors='b')
 
-    # for p1 in peaks:
-    #     for p2 in peaks:
-    #         if p1 >= p2:
-    #             continue
-    #         if (p1 in peaks1 and p2 in peaks2) or (p1 in peaks2 and p2 in peaks1):
-    #             plt.text(p1, p2, matrix[p1][p2], size=6)
-    #         else:
-    #             plt.text(p1, p2, matrix[p1][p2], size=6, color='white')
-
     for p1 in peaks:
         for p2 in peaks:
             if p1 >= p2:
@@ -241,39 +239,39 @@ def main():
     plt.xlim(0, total)
     plt.ylim(0, total)
     plt.colorbar()
-    plt.savefig('data/matrix.pdf', format='pdf')
+    plt.savefig(os_join(TEST_PATH, 'data', 'matrix.pdf'), format='pdf')
 
     print('saving matrix as pickle')
-    out = open('data/matrix.pickle', 'w')
+    out = open(os_join(TEST_PATH, 'data', 'matrix.pickle'), 'wb')
     dump(matrix, out)
     out.close()
 
     print('Saving BEDs')
-    out = open('data/peaks_protA.bed', 'w')
+    out = open(os_join(TEST_PATH, 'data', 'peaks_protA.bed'), 'w')
     out.write(''.join('{0}\t{1}\t{2}\n'.format(
         bins[p][0],
         bins[p][1] * reso + int(random() * 1000),
         bins[p][1] * reso + int(random() * 1000)) for p in sorted(peaks1)))
     out.close()
 
-    out = open('data/peaks_protB.bed', 'w')
+    out = open(os_join(TEST_PATH, 'data', 'peaks_protB.bed'), 'w')
     out.write(''.join('{0}\t{1}\t{2}\n'.format(
         bins[p][0],
         bins[p][1] * reso + int(random() * 1000),
         bins[p][1] * reso + int(random() * 1000)) for p in sorted(peaks2)))
     out.close()
 
-    Popen('cat data/peaks_protA.bed data/peaks_protB.bed | sort -k1n -k2n > data/peaks_prot.bed',
+    Popen(('cat {0}/data/peaks_protA.bed {0}/data/peaks_protB.bed | '
+           'sort -k1n -k2n > {0}/data/peaks_prot.bed').format(TEST_PATH),
           shell=True).communicate()
 
-    out = open('data/compartments.bed', 'w')
+    out = open(os_join(TEST_PATH, 'data', 'compartments.bed'), 'w')
     out.write(''.join('{}\t{}\t{}\t{}\n'.format(
         c, p * reso, p * reso + reso,
         (1 if p in cmprts[c]['A'] else -1) * (0.2 + 0.8 * random()))
                       for c in chroms
                       for p in range(chroms[c])))
     out.close()
-
 
 if __name__ == "__main__":
     exit(main())

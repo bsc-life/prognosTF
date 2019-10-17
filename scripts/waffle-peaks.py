@@ -17,9 +17,9 @@ try:
     from meta_waffle.utils import printime, mkdir
 except ImportError:  # meta-waffle is not installed.. but it's still ok!!!
     from os.path  import join as os_join
-    from sys.path import insert
+    import sys
 
-    insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
+    sys.path.insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
 
 
 def main():
@@ -52,13 +52,13 @@ def main():
         inbam, resolution, get_bins=submatrices!='')
 
     # define pairs of peaks
-    peak_coord1, peak_coord2, npeaks1, npeaks2, same = parse_peaks(
+    peak_coord1, peak_coord2, npeaks1, npeaks2 = parse_peaks(
         peak_files, resolution, in_feature, chrom_sizes, windows_span)
     printime('Total of different/usable peak bin coordinates in {}:'.format(
         peak_files[0]), silent)
     printime(('   - {} (out of {})').format(
         len(peak_coord1), npeaks1), silent)
-    if not same:
+    if len(peak_files) > 1:
         printime('Total of different/usable peak bin coordinates in {}:'.format(
             peak_files[1]), silent)
         printime(('   - {} (out of {})').format(

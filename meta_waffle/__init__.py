@@ -54,9 +54,7 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
     peaks1 = open(peak_files[0], "r")
     try:
         peaks2 = open(peak_files[1], "r")
-        same = False
     except IndexError:
-        same = True
         peaks2 = peaks1
 
     # find out if bed file contain features, or only coordinates
@@ -96,12 +94,16 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
 
     # sort peaks
     bin_coordinate1 = sorted(bin_coordinate1)
-    if same:
+    if len(peak_files) == 1:
         bin_coordinate2 = bin_coordinate1
     else:
         bin_coordinate2 = sorted(bin_coordinate2)
 
-    return bin_coordinate1, bin_coordinate2, npeaks1, npeaks2, same
+    peaks1.close()
+    if len(peak_files) > 1:
+        peaks2.close()
+
+    return bin_coordinate1, bin_coordinate2, npeaks1, npeaks2
 
 
 def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
