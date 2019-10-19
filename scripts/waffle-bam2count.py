@@ -7,6 +7,7 @@ from multiprocessing                 import cpu_count
 from argparse                        import ArgumentParser
 from collections                     import OrderedDict
 from datetime                        import datetime
+from random                          import getrandbits
 
 from pytadbit.parsers.hic_bam_parser import get_biases_region, _iter_matrix_frags
 from pytadbit.parsers.hic_bam_parser import read_bam, filters_to_bin, printime
@@ -71,12 +72,12 @@ def write_matrix(inbam, resolution, biases, outdir,
         os.system('rm -rf %s' % (os.path.join(tmpdir, '_tmp_%s' % (rand_hash))))
 
 
-def sort_BAMtsv(outdir, resolution):
+def sort_BAMtsv(outdir, tmp, resolution):
     tsv = os.path.join(outdir, "{}_bam_{}.tsv".format(
         os.path.split(outdir)[-1], nicer(resolution, sep='')))
     printime('Sorting BAM matrix: {}'.format(tsv))
     # sort file first and second column and write to same file
-    _ = Popen("sort -k1n -k2n -S 10% {0} -o {0}".format(tsv),
+    _ = Popen("sort -k1n -k2n -S 10% {0} -T {1} -o {0}".format(tsv, tmp),
               shell=True).communicate()
 
 
@@ -90,8 +91,15 @@ def main():
     write_matrix(inbam, resolution, biases_file, outdir,
                  ncpus=opts.ncpus, clean=opts.clean)
 
+    rand_hash = "%016x" % getrandbits(64)
+    tmpdir = os.path.join('.', '_tmp_%s' % (rand_hash))
+    mkdir(tmpdir)
+
     #sort all files for only read once per pair of peaks to extract
-    sort_BAMtsv(outdir, resolution)
+    sort_BAMtsv(outdir, tmpdir, resolution)
+
+    os.system('rm -rf {}'.format(tmpdir))
+
     printime('Done.')
 
 
