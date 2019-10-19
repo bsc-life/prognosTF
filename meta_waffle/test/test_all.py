@@ -2,11 +2,15 @@ import unittest
 from os.path import join as os_join
 from os.path import split as os_split
 from subprocess import Popen
+from collections import defaultdict
+
 try:  # python 3
     from pickle        import load, _Unpickler as Unpickler
 except ImportError:  # python 2
     from pickle        import load, Unpickler
-from meta_waffle       import chromosome_from_bam, parse_peaks, generate_pairs
+
+from meta_waffle.utils import chromosome_from_bam
+from meta_waffle       import parse_peaks, generate_pairs
 from meta_waffle       import submatrix_coordinates, interactions_at_intersection
 
 
@@ -17,6 +21,7 @@ WINDOWS_SPAN = 4
  ITER_PAIRS, PAIR_PEAKS) = load(open(os_join(TEST_PATH, 'test_data.pickle'), 'rb'))
 
 GROUPS = load(open(os_join(TEST_PATH, 'test_result.pickle'), 'rb'))
+
 
 # Popen('python {}/Simulate_HiC.py'.format(TEST_PATH), shell=True).communicate()
 
@@ -75,8 +80,12 @@ class TestWaffle(unittest.TestCase):
         fh = open(biases, "rb")
         badcols = Unpickler(fh, encoding='latin1').load()['badcol']
         fh.close()
-        iter_pairs = submatrix_coordinates(PAIR_PEAKS, badcols, (WINDOWS_SPAN * 2) + 1)
+        counter = defaultdict(int)
+        iter_pairs = submatrix_coordinates(PAIR_PEAKS, badcols,
+                                           (WINDOWS_SPAN * 2) + 1, counter)
         self.assertEqual([v for v in iter_pairs], ITER_PAIRS)
+        self.assertEqual(counter[''], 33)
+
 
     def test_05_interactions_at_intersection(self):
         """

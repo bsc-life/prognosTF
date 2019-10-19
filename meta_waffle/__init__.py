@@ -3,29 +3,7 @@
 """
 """
 
-from collections import OrderedDict, defaultdict
-from pysam       import AlignmentFile
-
-
-def chromosome_from_bam(inbam, resolution, get_bins=False):
-    ## peaks file sorted per chromosome
-    bamfile = AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references, [x // resolution + 1
-                                                    for x in bamfile.lengths]))
-    total = 0
-    section_pos = dict()
-    bins = {}
-    for crm in sections:
-        section_pos[crm] = (total, total + sections[crm])
-        if get_bins:
-            for n, i in enumerate(range(*section_pos[crm])):
-                bins[i] = (crm, n)
-        total += sections[crm]
-
-    chrom_sizes = OrderedDict(zip(bamfile.references,
-                                  [x for x in bamfile.lengths]))
-
-    return section_pos, chrom_sizes, bins
+from collections import defaultdict
 
 
 def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
@@ -162,7 +140,7 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
     return final_pairs
 
 
-def submatrix_coordinates(final_pairs, badcols, wsp):
+def submatrix_coordinates(final_pairs, badcols, wsp, counter):
     '''
     Input BED file(s) of ChIP peaks and bin into desired resolution of Hi-C
     '''
@@ -186,7 +164,7 @@ def submatrix_coordinates(final_pairs, badcols, wsp):
 
         if not range1 or not range2:
             continue
-
+        counter[what] +=1
         for x, p1 in range1:
             for y, p2 in range2:
                 buf.append(((p1, p2), x, y, what))
@@ -245,23 +223,28 @@ def interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins):
         do_the_thing = lambda a, b, c, d, e, f, g: None
 
     groups = {}
-    for X, Y, x, y, raw, nrm, group in readfiles(genomic_mat, iter_pairs):
+    readfiles_iterator = readfiles(genomic_mat, iter_pairs)
+    for X, Y, x, y, raw, nrm, group in readfiles_iterator:
         try:
-            groups[group]['counter'] += 1
+            groups[group]['sum_raw'][x, y] += raw
+            groups[group]['sqr_raw'][x, y] += raw**2
+            groups[group]['sum_nrm'][x, y] += nrm
+            groups[group]['sqr_nrm'][x, y] += nrm**2
+            groups[group]['passage'][x, y] += 1
+            do_the_thing(X, Y, x, y, raw, nrm, group)
         except KeyError:
             groups[group] = {
-                'counter' : 1,
                 'sum_raw' : defaultdict(int),
                 'sqr_raw' : defaultdict(int),
                 'sum_nrm' : defaultdict(float),
                 'sqr_nrm' : defaultdict(float),
                 'passage' : defaultdict(int)}
-        groups[group]['sum_raw'][x, y] += raw
-        groups[group]['sqr_raw'][x, y] += raw**2
-        groups[group]['sum_nrm'][x, y] += nrm
-        groups[group]['sqr_nrm'][x, y] += nrm**2
-        groups[group]['passage'][x, y] += 1
-        do_the_thing(X, Y, x, y, raw, nrm, group)
+            groups[group]['sum_raw'][x, y] += raw
+            groups[group]['sqr_raw'][x, y] += raw**2
+            groups[group]['sum_nrm'][x, y] += nrm
+            groups[group]['sqr_nrm'][x, y] += nrm**2
+            groups[group]['passage'][x, y] += 1
+            do_the_thing(X, Y, x, y, raw, nrm, group)
 
     if bins:
         out.close()

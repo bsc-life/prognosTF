@@ -4,6 +4,7 @@
 """
 
 from os.path     import split as os_split
+from collections import defaultdict
 
 from argparse    import ArgumentParser
 try:  # python 3
@@ -12,14 +13,17 @@ except ImportError:  # python 2
     from pickle        import dump, HIGHEST_PROTOCOL, Unpickler
 
 try:
-    from meta_waffle       import chromosome_from_bam, parse_peaks, generate_pairs
+    from meta_waffle       import parse_peaks, generate_pairs
     from meta_waffle       import submatrix_coordinates, interactions_at_intersection
-    from meta_waffle.utils import printime, mkdir
+    from meta_waffle.utils import printime, mkdir, chromosome_from_bam
 except ImportError:  # meta-waffle is not installed.. but it's still ok!!!
     from os.path  import join as os_join
     import sys
 
     sys.path.insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
+    from meta_waffle       import parse_peaks, generate_pairs
+    from meta_waffle       import submatrix_coordinates, interactions_at_intersection
+    from meta_waffle.utils import printime, mkdir, chromosome_from_bam
 
 
 def main():
@@ -52,28 +56,43 @@ def main():
         inbam, resolution, get_bins=submatrices!='')
 
     # define pairs of peaks
+    printime(' - Parsing peaks', silent)
     peak_coord1, peak_coord2, npeaks1, npeaks2 = parse_peaks(
         peak_files, resolution, in_feature, chrom_sizes, windows_span)
-    printime('Total of different/usable peak bin coordinates in {}:'.format(
-        peak_files[0]), silent)
+    if not silent:
+        print((' - Total different (not same bin) and usable (not at chromosome'
+        'ends) peaks in {}').format(peak_files[0]))
     printime(('   - {} (out of {})').format(
         len(peak_coord1), npeaks1), silent)
     if len(peak_files) > 1:
-        printime('Total of different/usable peak bin coordinates in {}:'.format(
-            peak_files[1]), silent)
+        print((' - Total different (not same bin) and usable (not at chromosome'
+        'ends) peaks in {}').format(peak_files[1]))
         printime(('   - {} (out of {})').format(
             len(peak_coord2), npeaks2), silent)
 
-    printime('- Generating pairs of coordinates...', silent)
+    printime(' - Generating pairs of coordinates...', silent)
     pair_peaks = generate_pairs(peak_coord1, peak_coord2, resolution,
                                 windows_span, max_dist, window, section_pos)
 
-    iter_pairs = submatrix_coordinates(pair_peaks, badcols, (windows_span * 2) + 1)
+    counter = defaultdict(int)
+    iter_pairs = submatrix_coordinates(pair_peaks, badcols,
+                                       (windows_span * 2) + 1, counter)
 
     # retrieve interactions at peak pairs using genomic matrix
     # sum them by feature and store them in dictionary
     printime(' - Reading genomic matrix and peaks', silent)
     groups = interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins)
+
+    printime(' - Subatrices extracted by category:', silent)
+    if not silent:
+        for group in groups:
+            print('    - {:<10} : {:>15}'.format(group if group else 'Total', counter[group]))
+
+
+    # add the counts of pairs per waffle
+    for group in groups:
+        groups[group]['counter'] = counter[group]
+
     printime(' - Finished extracting', silent)
 
     out = open(outfile, 'wb')

@@ -2,3 +2,4 @@ tmp
 test/data
 *.egg-info
 __pycache__
+*.pyc
