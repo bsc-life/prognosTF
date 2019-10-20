@@ -41,7 +41,11 @@ def main():
     biases       = opts.biases
     submatrices  = opts.submatrices
     silent       = opts.silent
-    badcols      = Unpickler(open(biases, "rb"), encoding='latin1').load()['badcol']
+    try:
+        badcols  = Unpickler(open(biases, "rb"), encoding='latin1').load()['badcol']
+    except TypeError:
+        badcols  = Unpickler(open(biases, "rb")).load()['badcol']
+
 
     if window not in  ['inter', 'intra', 'all']:
         window = [int(x) / resolution for x in window.split('-')]
