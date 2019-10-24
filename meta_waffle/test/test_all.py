@@ -31,9 +31,6 @@ class TestWaffle(unittest.TestCase):
     class
     """
 
-    def __init__(self, args):
-        super().__init__(args)
-
     def test_01_bam_loading(self):
         """
         function
@@ -78,7 +75,10 @@ class TestWaffle(unittest.TestCase):
         """
         biases = os_join(TEST_PATH, 'data', 'biases.pickle')
         fh = open(biases, "rb")
-        badcols = Unpickler(fh, encoding='latin1').load()['badcol']
+        try:
+            badcols = Unpickler(fh, encoding='latin1').load()['badcol']
+        except TypeError:
+            badcols = Unpickler(fh).load()['badcol']
         fh.close()
         counter = defaultdict(int)
         iter_pairs = submatrix_coordinates(PAIR_PEAKS, badcols,
@@ -99,8 +99,45 @@ class TestWaffle(unittest.TestCase):
 
         self.assertEqual(groups, GROUPS)
 
+    def test_06_windows(self):
+        """
+        test if total intra chromsomal is the same as several windows
+        """
+        max_dist = float('inf')
+        biases = os_join(TEST_PATH, 'data', 'biases.pickle')
+        fh = open(biases, "rb")
+        try:
+            badcols = Unpickler(fh, encoding='latin1').load()['badcol']
+        except TypeError:
+            badcols = Unpickler(fh).load()['badcol']
+        window = 'intra'
+        groups = {}
+        windows = [(0, 100), (100, 200), (200, 300), (300, 400)]
+        for window in ['intra'] + windows:
+            pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2, RESOLUTION,
+                                        WINDOWS_SPAN, max_dist, window, SECTION_POS)
+            counter = defaultdict(int)
+            iter_pairs = submatrix_coordinates(pair_peaks, badcols,
+                                               (WINDOWS_SPAN * 2) + 1, counter)
+            genomic_mat = os_join(TEST_PATH, 'data', 'data_bam_10kb.tsv')
+            submatrices = os_join(TEST_PATH, 'tmp.tsv')
+
+            groups[window] = interactions_at_intersection(
+
+                genomic_mat, iter_pairs, submatrices, '')
+        self.assertEqual(sum(groups['intra']['']['sum_raw'].values()), 10705)
+        self.assertEqual(sum(sum(groups[window]['']['sum_raw'].values())
+                             for window in windows), 10705)
+        self.assertEqual(round(sum(groups['intra']['']['sum_nrm'].values()), 5),
+                         round(sum(sum(groups[window]['']['sum_nrm'].values())
+                                   for window in windows), 5))
+        self.assertEqual(round(sum(groups['intra']['']['sum_nrm'].values()), 5),
+                         round(2720.13242866, 5))
+
+
 def run():
     unittest.main()
+
 
 if __name__ == '__main__':
     run()
