@@ -183,28 +183,27 @@ def submatrix_coordinates(final_pairs, badcols, wsp, counter):
 
 
 def readfiles(genomic_file, iter_pairs):
-    def split_line1(line):
-        a, b, c, d = line.split()
-        return (int(a), int(b)), c, d
-
     # create empty meta-waffles
     fh1 = open(genomic_file)
-    pos1, raw, nrm = split_line1(next(fh1))
-    pos2, x, y, e = next(iter_pairs)
+    a, b, raw, nrm = next(fh1).split('\t')
+    pos1 = (int(a), int(b))
+    pos2, x, y, group = next(iter_pairs)
 
     try:
         while True:
             if pos2 > pos1:
-                pos1, raw, nrm = split_line1(next(fh1))
+                a, b, raw, nrm = next(fh1).split('\t')
+                pos1 = (int(a), int(b))
             elif pos1 == pos2:
                 raw = int(raw)
                 nrm = float(nrm)
-                yield pos1[0], pos1[1], x, y, raw, nrm, e
-                pos2, x, y, e = next(iter_pairs)
+                yield pos1, x, y, raw, nrm, group
+                pos2, x, y, group = next(iter_pairs)
                 if pos1 != pos2:  # some cells in the peak file are repeated
-                    pos1, raw, nrm = split_line1(next(fh1))
+                    a, b, raw, nrm = next(fh1).split('\t')
+                    pos1 = (int(a), int(b))
             else:
-                pos2, x, y, e = next(iter_pairs)
+                pos2, x, y, group = next(iter_pairs)
     except StopIteration:
         fh1.close()
 
@@ -224,7 +223,7 @@ def interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins):
 
     groups = {}
     readfiles_iterator = readfiles(genomic_mat, iter_pairs)
-    for X, Y, x, y, raw, nrm, group in readfiles_iterator:
+    for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
         try:
             groups[group]['sum_raw'][x, y] += raw
             groups[group]['sqr_raw'][x, y] += raw**2
