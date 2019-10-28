@@ -1,6 +1,8 @@
 __author__ = 'sgalan'
 
 import os
+import matplotlib
+matplotlib.use('Agg')
 
 from subprocess                      import Popen
 from multiprocessing                 import cpu_count
@@ -31,7 +33,7 @@ def write_matrix(inbam, resolution, biases, outdir,
         region1=region1, start1=start1, end1=end1,
         region2=region2, start2=start2, end2=end2,
         tmpdir=tmpdir, verbose=verbose)
-
+    
     bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references,
                                [x / resolution + 1 for x in bamfile.lengths]))
@@ -104,7 +106,8 @@ def main():
 
 
 def get_options():
-    parser = ArgumentParser(usage="-bam Bam -r INT [options]")
+    parser = ArgumentParser()
+
     parser.add_argument('-bam', '--bam', dest='inbam', required=True, default=False,
                         help='Input HiC-BAM file')
     parser.add_argument('-r', '--resolution', dest='resolution', required=True, default=False,
