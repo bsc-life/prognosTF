@@ -28,13 +28,11 @@ def write_matrix(inbam, resolution, biases, outdir,
     if not isinstance(filter_exclude, int):
         filter_exclude = filters_to_bin(filter_exclude)
 
-    chrom, rand_hash, bin_coords, chunks = read_bam(
+    _, rand_hash, bin_coords, chunks = read_bam(
         inbam, filter_exclude, resolution, ncpus=ncpus,
         region1=region1, start1=start1, end1=end1,
         region2=region2, start2=start2, end2=end2,
         tmpdir=tmpdir, verbose=verbose)
-    
-    print(chrom)
     
     bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references,
@@ -108,7 +106,8 @@ def main():
 
 
 def get_options():
-    parser = ArgumentParser(usage="-bam Bam -r INT [options]")
+    parser = ArgumentParser()
+
     parser.add_argument('-bam', '--bam', dest='inbam', required=True, default=False,
                         help='Input HiC-BAM file')
     parser.add_argument('-r', '--resolution', dest='resolution', required=True, default=False,
