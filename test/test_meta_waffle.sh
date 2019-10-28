@@ -8,7 +8,7 @@ echo ""
 echo ""
 echo ""
 echo "BAM2count"
-python ../scripts/waffle-bam2count.py --bam data/fake.bam -r 10000 -C 8 -o tmp -b data/biases.pickle
+python ../scripts/waffle-bam2count.py --bam data/fake.bam -r 10000 -C 8 -o data -b data/biases.pickle
 
 echo ""
 echo ""
