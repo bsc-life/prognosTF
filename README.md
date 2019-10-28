@@ -12,6 +12,8 @@
 
 ## Generate sub-matrices at a given resolution 
 
+![example image from waffle-plot](test/example_plot.png)
+
 We will need sub-matrices from which we will extract sub-matrices.
 
 To run it we need:
@@ -68,3 +70,5 @@ Finally, this code is written to analyze the following intervals of distance bet
               (15000000, 20000000),
               (20000000, 30000000))
 ```
+
+
