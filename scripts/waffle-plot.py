@@ -41,8 +41,11 @@ def main():
 
     opts = get_options()
 
-    waffle_files   = opts.peak_files
-    waffle = load(open(waffle_files, 'rb'))
+    waffle_file = opts.peak_file
+    output      = opts.outfile
+    title       = opts.title
+
+    waffle = load(open(waffle_file, 'rb'))
 
     group = ''
 
@@ -123,10 +126,13 @@ def main():
     xvals = np.asarray(xvals)
     yvals = np.asarray(yvals)
 
-    plt.figure(figsize=(20, 16))
+    plt.figure(figsize=(14, 16))
+    plt.subplots_adjust(left=0, bottom=0.07, right=0.92, top=0.9, wspace=0, hspace=0.3)
 
+    if title:
+        plt.suptitle(title, size=15)
     ## POLAR
-    axr = plt.subplot2grid((3, 14), (0, 0), rowspan=2, colspan=13, polar=True)
+    axr = plt.subplot2grid((3, 14), (0, 3), rowspan=2, colspan=11, polar=True)
     axr.set_title('Corrected by distance average submatrices between peaks', size=13)
     # axr = plt.subplot(211, polar=True)
     m = axr.pcolormesh(Phi, R, data, linewidth=0)
@@ -164,7 +170,7 @@ def main():
     axs.set_ylim(-0.5, size - 0.5)
 
     ## CORRELATION
-    axl = plt.subplot2grid((3, 14), (2, 7), colspan=4)
+    axl = plt.subplot2grid((3, 14), (2, 7), colspan=7)
     x = size**0.5 - xvals**0.5
     y = yvals
     func_string = 'A*x + C'
@@ -182,73 +188,35 @@ def main():
     axl.legend(fit_line + [p1, p2],
                ['Fit ($R^2=%.3f$):\ny = $%s$' % (r2, formula),
                 '95% Confidence band',
-                '95% Prediction band\n'],
+                '95% Prediction band'],
                title='Spearman: {:.2f}\n  p-val: {:.3e}'.format(spear, pval),
-               loc='upper left', frameon=False, bbox_to_anchor=[1,1])
-    axl.set_xlabel('Distance $d$ between peaks ($\sqrt{%d} - \sqrt{d}$)' % (size))
+               loc='upper left', frameon=False, bbox_to_anchor=[0.71, 1.37])
+    axl.set_xlabel('Distance $d_i$ ($i$ from 0 to $N$) between peaks ($\sqrt{max_{0 \leq j \leq N}(d_j)} - \sqrt{d_i}$)')
     axl.set_ylabel('Normalized interactions')
     axl.set_xticks(size**0.5 - yticks**0.5)
     axl.set_xticklabels(['{}'.format(nicer(t * resolution)) for t in yticks], rotation=90)
-    axl.set_title('Correlation between interactions and distance', size=12)
+    axl.set_title('Interactions vs distances', size=12)
     axl.set_xlim((min(x) - abs(max(x)-min(x))*0.01, max(x) + abs(max(x)-min(x))*0.01))
     axl.grid()
+
+    plt.savefig(output, format=output.split('.')[-1])
 
 
 def rotate(li, x):
     return li[-x % len(li):] + li[:-x % len(li)]
 
 
-
-
 def get_options():
     parser = ArgumentParser()
 
-    parser.add_argument('--peaks', dest='peak_files', required=True,
-                        nargs="+", metavar='PATH',
-                        help='''one or two pairwise peaks files to
-                        compute average submatrix (norm and raw). These files
-                        should contain at least two columns, chromosome and
-                        position, and may contain an extra column of feature. If
-                        present, the result will be returned according to the
-                        possible combination of this feature''')
-    # parser.add_argument('--bam', dest='inbam', required=True,
-    #                     metavar='PATH', help='Input HiC-BAM file')
-    # parser.add_argument('--biases', dest='biases', default=True, help='Biases',
-    #                     required=True)
-    parser.add_argument('--genomic_matrix', dest='genomic_mat', default=True,
-                        metavar='GENOMIC_MATRIX', required=True,
-                        help='''Path to genomic matrix in 3 columns format
-                        (should be sorted with `sort -k1,2n`)''')
-    # parser.add_argument('-r', '--resolution', dest='resolution', required=True,
-    #                     metavar='INT', default=False, type=int,
-    #                     help='wanted resolution from generated matrix')
-    parser.add_argument('-o', '--outfile', dest='outfile', default='',
-                        metavar='PATH', help='path to output file (pickle format)')
-    parser.add_argument('--all_submatrices', dest='submatrices', default='',
-                        metavar='PATH', help='''if PATH is provided here, stores
-                        all the individual submatrices generated''')
-    parser.add_argument('-s', dest='windows_span', required=True, type=int,
-                        metavar='INT',
-                        help='''Windows span around center of the peak (in bins; the
-                        total windows size is 2 times windows-span + 1)''')
-    parser.add_argument('-m', '--max_dist', dest='max_dist', metavar='INT',
-                        default=float('inf'), type=int,
-                        help='''[%(default)s] Max dist between center peaks''')
-    parser.add_argument('-w', '--window', dest='window', required=False,
-                        default='intra', metavar='INT-INT', type=str,
-                        help='''[%(default)s] If only interested in some
-                        intervals to check: "-w 1000000-2000000"
-                        correspond to the window interval, from 1Mb to 2Mb.
-                        Use "-w inter" for inter-chromosomal regions, "-w intra" for
-                        intra-chromosomal, "-w all" for all combinations
-                        (without distance restriction)''')
-    parser.add_argument('--first_is_feature', dest='first_is_feature', default=False,
-                        action='store_true', help='''When 2 BED files are input,
-                        the peaks in the first BED should be also considered as
-                        feature. This is to create average sub-matrices for
-                        each peak in the first BED file.''')
-    parser.add_argument('--silent', dest='silent', default=False,
-                        action='store_true', help='''shhhhhhttt''')
+    parser.add_argument('-i', '--input', dest='peak_file', required=True,
+                        metavar='PATH', help='''path to input pickle file''')
+    parser.add_argument('-o', '--output', dest='outfile', required=True,
+                        metavar='PATH', help='''path to output image (any format
+                        based on file extension)''')
+    parser.add_argument('--title', dest='title', default=None,
+                        metavar='STR', help='''some quoted text to be used as
+                        title for the plot''')
 
     opts = parser.parse_args()
     return opts
