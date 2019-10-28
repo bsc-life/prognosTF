@@ -23,6 +23,9 @@ from matplotlib    import pyplot as plt
 
 TEST_PATH = os_split(__file__)[0]
 
+if not TEST_PATH:
+    TEST_PATH = '.'
+
 QUICK = False
 
 def load_genome(chroms):

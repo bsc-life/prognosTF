@@ -44,21 +44,36 @@ def write_matrix(inbam, resolution, biases, outdir,
 
     if biases:
         bias1, bias2, decay, bads1, bads2 = get_biases_region(biases, bin_coords)
-
     else:
         bads1 = bads2 = {}
+
+    if bads1 is bads2:
+        badcols = bads1
+    else:  # should never happen
+        badcols = bads1
+        badcols.update(bads2)
 
     if verbose:
         printime('  - Writing matrices')
 
-    fnam = os.path.join(outdir, '{}_bam_{}.tsv'.format(os.path.split(outdir)[-1], nicer(resolution, sep='')))
     mkdir(outdir)
+    # write the rest of the file to be sorted
+    fnam = os.path.join(outdir, '{}_bam_{}.tsv'.format(os.path.split(outdir)[-1],
+                                                       nicer(resolution, sep='')))
     out = open(fnam, 'w')
+    nheader = 0
+    for i, c in enumerate(bamfile.references):
+        out.write('# CHROM\t{}\t{}\n'.format(c, bamfile.lengths[i]))
+        nheader += 1
+    out.write('# RESOLUTION\t{}\n'.format(resolution))
+    nheader += 1
+    out.write('# BADCOLS\t{}\n'.format(','.join(map(str, badcols.keys())))) 
+    nheader += 1
 
     # pull all sub-matrices and write full matrix
     for c, j, k, v in _iter_matrix_frags(chunks, tmpdir, rand_hash,
                                          verbose=verbose, clean=clean):
-        if k < j or j in bads1 or k in bads2:  # we keep only half matrix
+        if k < j or j in badcols or k in badcols:  # we keep only half matrix
             continue
         try:
             n = v / bias1[j] / bias2[k] / decay[c][k - j]  # normalize
@@ -70,15 +85,21 @@ def write_matrix(inbam, resolution, biases, outdir,
     # this is the last thing we do in case something goes wrong
     if clean:
         os.system('rm -rf %s' % (os.path.join(tmpdir, '_tmp_%s' % (rand_hash))))
+    return nheader
 
 
-def sort_BAMtsv(outdir, tmp, resolution):
+def sort_BAMtsv(nheader, outdir, tmp, resolution):
     tsv = os.path.join(outdir, "{}_bam_{}.tsv".format(
         os.path.split(outdir)[-1], nicer(resolution, sep='')))
     printime('Sorting BAM matrix: {}'.format(tsv))
     # sort file first and second column and write to same file
-    _ = Popen("sort -k1n -k2n -S 10% {0} -T {1} -o {0}".format(tsv, tmp),
-              shell=True).communicate()
+    print(("(head -n {0} {1} && tail -n +{0} {1} | "
+               "sort -k1n -k2n -S 10% -T {2}) > {1}").format(
+                   nheader, tsv, tmp))
+    _ = Popen(("(head -n {0} {2} && tail -n +{1} {2} | "
+               "sort -k1n -k2n -S 10% -T {3}) > {2}_").format(
+                   nheader, nheader + 1, tsv, tmp), shell=True).communicate()
+    os.system("mv {0}_ {0}".format(tsv))
 
 
 def main():
@@ -88,15 +109,15 @@ def main():
     outdir = opts.outdir
     biases_file = opts.biases_file
 
-    write_matrix(inbam, resolution, biases_file, outdir,
-                 ncpus=opts.ncpus, clean=opts.clean)
+    nheader = write_matrix(inbam, resolution, biases_file, outdir,
+                           ncpus=opts.ncpus, clean=opts.clean)
 
     rand_hash = "%016x" % getrandbits(64)
     tmpdir = os.path.join('.', '_tmp_%s' % (rand_hash))
     mkdir(tmpdir)
 
     #sort all files for only read once per pair of peaks to extract
-    sort_BAMtsv(outdir, tmpdir, resolution)
+    sort_BAMtsv(nheader, outdir, tmpdir, resolution)
 
     os.system('rm -rf {}'.format(tmpdir))
 
