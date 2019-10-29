@@ -10,27 +10,6 @@ from collections import OrderedDict
 from pysam       import AlignmentFile
 
 
-def chromosome_from_bam(inbam, resolution, get_bins=False):
-    ## peaks file sorted per chromosome
-    bamfile = AlignmentFile(inbam, 'rb')
-    sections = OrderedDict(zip(bamfile.references, [x // resolution + 1
-                                                    for x in bamfile.lengths]))
-    total = 0
-    section_pos = dict()
-    bins = {}
-    for crm in sections:
-        section_pos[crm] = (total, total + sections[crm])
-        if get_bins:
-            for n, i in enumerate(range(*section_pos[crm])):
-                bins[i] = (crm, n)
-        total += sections[crm]
-
-    chrom_sizes = OrderedDict(zip(bamfile.references,
-                                  [x for x in bamfile.lengths]))
-
-    return section_pos, chrom_sizes, bins
-
-
 def parse_fasta(infasta):
     fh = open(infasta)
     genome = OrderedDict()
@@ -48,9 +27,21 @@ def parse_fasta(infasta):
     return genome
 
 
+def chromosome_from_bam(inbam, resolution, get_bins=False):
+    bamfile = AlignmentFile(inbam, 'rb')
+    chrom_sizes = OrderedDict()
+    for i, c in enumerate(bamfile.references):
+        chrom_sizes[c] = bamfile.lengths[i]
+    return chromosome_from_header(chrom_sizes, resolution, get_bins=get_bins)
+
+
 def chromosome_from_fasta(infasta, resolution, get_bins=False):
     chrom_sizes = parse_fasta(infasta)
-    sections = OrderedDict((c, v / resolution + 1) for c, v in chrom_sizes.items())
+    return chromosome_from_header(chrom_sizes, resolution, get_bins=get_bins)
+
+
+def chromosome_from_header(chrom_sizes, resolution, get_bins=False):
+    sections = OrderedDict((c, v // resolution + 1) for c, v in chrom_sizes.items())
 
     total = 0
     section_pos = dict()

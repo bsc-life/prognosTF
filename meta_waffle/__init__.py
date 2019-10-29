@@ -185,7 +185,10 @@ def submatrix_coordinates(final_pairs, badcols, wsp, counter):
 def readfiles(genomic_file, iter_pairs):
     # create empty meta-waffles
     fh1 = open(genomic_file)
-    a, b, raw, nrm = next(fh1).split('\t')
+    for line in fh1:
+        if not line.startswith('#'):
+            break
+    a, b, raw, nrm = line.split('\t')
     pos1 = (int(a), int(b))
     pos2, x, y, group = next(iter_pairs)
 
