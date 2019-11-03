@@ -49,6 +49,7 @@ def main():
 
     group = ''
 
+    print(waffle.keys())
     resolution = waffle[group]['resolution']
     size       = waffle[group]['size']
     counter    = waffle[group]['counter']

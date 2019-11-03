@@ -19,7 +19,7 @@ from pytadbit.utils.extraviews       import nicer
 from pysam                           import AlignmentFile
 
 
-def write_matrix(inbam, resolution, biases, outdir,
+def write_matrix(inbam, resolution, biases, outfile,
                  filter_exclude=(1, 2, 3, 4, 6, 7, 8, 9, 10),
                  region1=None, start1=None, end1=None, clean=True,
                  region2=None, start2=None, end2=None,
@@ -33,7 +33,7 @@ def write_matrix(inbam, resolution, biases, outdir,
         region1=region1, start1=start1, end1=end1,
         region2=region2, start2=start2, end2=end2,
         tmpdir=tmpdir, verbose=verbose)
-    
+
     bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references,
                                [x / resolution + 1 for x in bamfile.lengths]))
@@ -58,18 +58,16 @@ def write_matrix(inbam, resolution, biases, outdir,
     if verbose:
         printime('  - Writing matrices')
 
-    mkdir(outdir)
+    mkdir(os.path.split(os.path.abspath(outfile))[0])
     # write the rest of the file to be sorted
-    fnam = os.path.join(outdir, '{}_bam_{}.tsv'.format(os.path.split(outdir)[-1],
-                                                       nicer(resolution, sep='')))
-    out = open(fnam, 'w')
+    out = open(outfile, 'w')
     nheader = 0
     for i, c in enumerate(bamfile.references):
         out.write('# CHROM\t{}\t{}\n'.format(c, bamfile.lengths[i]))
         nheader += 1
     out.write('# RESOLUTION\t{}\n'.format(resolution))
     nheader += 1
-    out.write('# BADCOLS\t{}\n'.format(','.join(map(str, badcols.keys())))) 
+    out.write('# BADCOLS\t{}\n'.format(','.join(map(str, badcols.keys()))))
     nheader += 1
 
     # pull all sub-matrices and write full matrix
@@ -90,9 +88,8 @@ def write_matrix(inbam, resolution, biases, outdir,
     return nheader
 
 
-def sort_BAMtsv(nheader, outdir, tmp, resolution):
-    tsv = os.path.join(outdir, "{}_bam_{}.tsv".format(
-        os.path.split(outdir)[-1], nicer(resolution, sep='')))
+def sort_BAMtsv(nheader, outfile, tmp):
+    tsv = outfile
     printime('Sorting BAM matrix: {}'.format(tsv))
     # sort file first and second column and write to same file
     print(("(head -n {0} {1} && tail -n +{0} {1} | "
@@ -105,13 +102,13 @@ def sort_BAMtsv(nheader, outdir, tmp, resolution):
 
 
 def main():
-    opts = get_options()
-    inbam = opts.inbam
-    resolution = opts.resolution
-    outdir = opts.outdir
+    opts        = get_options()
+    inbam       = opts.inbam
+    resolution  = opts.resolution
+    outfile     = opts.outfile
     biases_file = opts.biases_file
 
-    nheader = write_matrix(inbam, resolution, biases_file, outdir,
+    nheader = write_matrix(inbam, resolution, biases_file, outfile,
                            ncpus=opts.ncpus, clean=opts.clean)
 
     rand_hash = "%016x" % getrandbits(64)
@@ -119,7 +116,7 @@ def main():
     mkdir(tmpdir)
 
     #sort all files for only read once per pair of peaks to extract
-    sort_BAMtsv(nheader, outdir, tmpdir, resolution)
+    sort_BAMtsv(nheader, outfile, tmpdir)
 
     os.system('rm -rf {}'.format(tmpdir))
 
@@ -133,8 +130,8 @@ def get_options():
                         help='Input HiC-BAM file')
     parser.add_argument('-r', '--resolution', dest='resolution', required=True, default=False,
                         type=int, help='wanted resolution from generated matrix')
-    parser.add_argument('-o', '--out', dest='outdir', required=True, default=False,
-                        help='Outdir to store counts')
+    parser.add_argument('-o', '--out', dest='outfile', required=True, default=False,
+                        help='Output file to store counts')
     parser.add_argument('-b', '--biases', dest='biases_file', required=True, default=False,
                         help='Pickle file with biases')
     parser.add_argument('--keep_tmp', dest='clean', default=True, action='store_false',
