@@ -22,7 +22,7 @@ except ImportError:  # meta-waffle is not installed.. but it's still ok!!!
     sys.path.insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
     from __init__      import parse_peaks, generate_pairs
     from __init__      import submatrix_coordinates, interactions_at_intersection
-    from utils import printime, mkdir, chromosome_from_bam
+    from utils import printime, mkdir, chromosome_from_header
 
 
 ERROR_INPUT = '''ERROR: file header should be like:
