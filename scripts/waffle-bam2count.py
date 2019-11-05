@@ -23,7 +23,7 @@ def write_matrix(inbam, resolution, biases, outfile,
                  filter_exclude=(1, 2, 3, 4, 6, 7, 8, 9, 10),
                  region1=None, start1=None, end1=None, clean=True,
                  region2=None, start2=None, end2=None,
-                 tmpdir='.', ncpus=8, verbose=True):
+                 tmpdir='.', ncpus=8, verbose=True, window=None):
 
     if not isinstance(filter_exclude, int):
         filter_exclude = filters_to_bin(filter_exclude)
@@ -70,10 +70,22 @@ def write_matrix(inbam, resolution, biases, outfile,
     out.write('# BADCOLS\t{}\n'.format(','.join(map(str, badcols.keys()))))
     nheader += 1
 
+    if window == 'all':
+        outside = lambda c_, j_, k_: False
+    elif window == 'intra':
+        outside = lambda c_, j_, k_: c_ == ''
+    elif window == 'inter':
+        outside = lambda c_, j_, k_: c_ != ''
+    else:
+        min_, max_ = window
+        outside = lambda c_, j_, k_: (k_ - j_) < min_ or (k_ - j_) > max_
+
     # pull all sub-matrices and write full matrix
     for c, j, k, v in _iter_matrix_frags(chunks, tmpdir, rand_hash,
                                          verbose=verbose, clean=clean):
         if k < j or j in badcols or k in badcols:  # we keep only half matrix
+            continue
+        if outside(c, j, k):
             continue
         try:
             n = v / bias1[j] / bias2[k] / decay[c][k - j]  # normalize
@@ -107,9 +119,16 @@ def main():
     resolution  = opts.resolution
     outfile     = opts.outfile
     biases_file = opts.biases_file
+    window      = opts.window
+
+    if window not in  ['inter', 'intra', 'all']:
+        window = [int(x) / resolution for x in window.split('-')]
+        if window[0] >= window[1]:
+            raise Exception('ERROR: beginning of window should be smaller '
+                            'than end')
 
     nheader = write_matrix(inbam, resolution, biases_file, outfile,
-                           ncpus=opts.ncpus, clean=opts.clean)
+                           ncpus=opts.ncpus, clean=opts.clean, window=window)
 
     rand_hash = "%016x" % getrandbits(64)
     tmpdir = os.path.join('.', '_tmp_%s' % (rand_hash))
@@ -138,6 +157,14 @@ def get_options():
                         help='Keep temporary files for debugging')
     parser.add_argument('-C', dest='ncpus', default=cpu_count(),
                         type=int, help='Number of CPUs used to read BAM')
+    parser.add_argument('-w', '--window', dest='window', required=False,
+                        default='all', metavar='INT-INT', type=str,
+                        help='''[%(default)s] If only interested in some
+                        intervals to check: "-w 1000000-2000000"
+                        correspond to the window interval, from 1Mb to 2Mb.
+                        Use "-w inter" for inter-chromosomal regions, "-w intra" for
+                        intra-chromosomal, "-w all" for all combinations
+                        (without distance restriction)''')
     opts = parser.parse_args()
 
     return opts
