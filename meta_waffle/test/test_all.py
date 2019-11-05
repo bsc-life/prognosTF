@@ -94,8 +94,18 @@ class TestWaffle(unittest.TestCase):
         genomic_mat = os_join(TEST_PATH, 'data', 'data_bam_10kb.tsv')
         submatrices = os_join(TEST_PATH, 'tmp.tsv')
 
-        groups = interactions_at_intersection(
-            genomic_mat, (v for v in ITER_PAIRS), submatrices, '')
+        groups = {
+            '': {
+                'sum_raw' : defaultdict(int),
+                'sqr_raw' : defaultdict(int),
+                'sum_nrm' : defaultdict(float),
+                'sqr_nrm' : defaultdict(float),
+                'passage' : defaultdict(int)
+            }
+        }
+
+        interactions_at_intersection(
+            groups, genomic_mat, (v for v in ITER_PAIRS), submatrices, '')
 
         self.assertEqual(groups, GROUPS)
 
@@ -122,9 +132,18 @@ class TestWaffle(unittest.TestCase):
             genomic_mat = os_join(TEST_PATH, 'data', 'data_bam_10kb.tsv')
             submatrices = os_join(TEST_PATH, 'tmp.tsv')
 
-            groups[window] = interactions_at_intersection(
+            groups[window] = {
+                '': {
+                    'sum_raw' : defaultdict(int),
+                    'sqr_raw' : defaultdict(int),
+                    'sum_nrm' : defaultdict(float),
+                    'sqr_nrm' : defaultdict(float),
+                    'passage' : defaultdict(int)
+                }
+            }
 
-                genomic_mat, iter_pairs, submatrices, '')
+            interactions_at_intersection(groups[window], genomic_mat,
+                                         iter_pairs, submatrices, '')
         self.assertEqual(sum(groups['intra']['']['sum_raw'].values()), 10705)
         self.assertEqual(sum(sum(groups[window]['']['sum_raw'].values())
                              for window in windows), 10705)

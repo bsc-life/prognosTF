@@ -95,6 +95,26 @@ def main():
     printime(' - Parsing peaks', silent)
     peak_coord1, peak_coord2, npeaks1, npeaks2 = parse_peaks(
         peak_files, resolution, in_feature, chrom_sizes, windows_span)
+
+    # get the groups
+    groups = {}
+    for _, _, group in peak_coord1:
+        groups[group] = {
+            'sum_raw' : defaultdict(int),
+            'sqr_raw' : defaultdict(int),
+            'sum_nrm' : defaultdict(float),
+            'sqr_nrm' : defaultdict(float),
+            'passage' : defaultdict(int)}
+
+    if len(peak_files) > 1:
+        for _, _, group in peak_coord2:
+            groups[group] = {
+                'sum_raw' : defaultdict(int),
+                'sqr_raw' : defaultdict(int),
+                'sum_nrm' : defaultdict(float),
+                'sqr_nrm' : defaultdict(float),
+                'passage' : defaultdict(int)}
+
     if not silent:
         print((' - Total different (not same bin) and usable (not at chromosome'
                'ends) peaks in {}').format(peak_files[0]))
@@ -117,7 +137,7 @@ def main():
     # retrieve interactions at peak pairs using genomic matrix
     # sum them by feature and store them in dictionary
     printime(' - Reading genomic matrix and peaks', silent)
-    groups = interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins)
+    interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins)
 
     printime(' - Subatrices extracted by category:', silent)
     if not silent:
