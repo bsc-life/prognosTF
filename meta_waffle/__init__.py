@@ -211,43 +211,28 @@ def readfiles(genomic_file, iter_pairs):
         fh1.close()
 
 
-def interactions_at_intersection(genomic_mat, iter_pairs, submatrices, bins):
-    def _write_submatrices(X, Y, x, y, raw, nrm, group):
+def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins):
+    def write_submatrices(X, Y, x, y, raw, nrm, group):
         c1, b1 = bins[X]
         c2, b2 = bins[Y]
         out.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
             c1, b1, c2, b2, x, y, raw, nrm, group))
 
+    readfiles_iterator = readfiles(genomic_mat, iter_pairs)
     if bins:
         out = open(submatrices, 'w')
-        do_the_thing = _write_submatrices
-    else:
-        do_the_thing = lambda a, b, c, d, e, f, g: None
-
-    groups = {}
-    readfiles_iterator = readfiles(genomic_mat, iter_pairs)
-    for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
-        try:
+        for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
             groups[group]['sum_raw'][x, y] += raw
             groups[group]['sqr_raw'][x, y] += raw**2
             groups[group]['sum_nrm'][x, y] += nrm
             groups[group]['sqr_nrm'][x, y] += nrm**2
             groups[group]['passage'][x, y] += 1
-            do_the_thing(X, Y, x, y, raw, nrm, group)
-        except KeyError:
-            groups[group] = {
-                'sum_raw' : defaultdict(int),
-                'sqr_raw' : defaultdict(int),
-                'sum_nrm' : defaultdict(float),
-                'sqr_nrm' : defaultdict(float),
-                'passage' : defaultdict(int)}
-            groups[group]['sum_raw'][x, y] += raw
-            groups[group]['sqr_raw'][x, y] += raw**2
-            groups[group]['sum_nrm'][x, y] += nrm
-            groups[group]['sqr_nrm'][x, y] += nrm**2
-            groups[group]['passage'][x, y] += 1
-            do_the_thing(X, Y, x, y, raw, nrm, group)
-
-    if bins:
+            write_submatrices(X, Y, x, y, raw, nrm, group)
         out.close()
-    return groups
+    else:
+        for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+            groups[group]['sum_raw'][x, y] += raw
+            groups[group]['sqr_raw'][x, y] += raw**2
+            groups[group]['sum_nrm'][x, y] += nrm
+            groups[group]['sqr_nrm'][x, y] += nrm**2
+            groups[group]['passage'][x, y] += 1

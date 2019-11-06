@@ -137,8 +137,9 @@ def main():
                 loops.add((bin2, bin1))
 
     print('generating SAM')
+    Popen('mkdir -p {}/tmp'.format(TEST_PATH), shell=True).communicate()
     Popen('mkdir -p {}/data'.format(TEST_PATH), shell=True).communicate()
-    out = open(os_join(TEST_PATH, 'data', 'fake.sam'), 'w')
+    out = open(os_join(TEST_PATH, 'tmp', 'fake.sam'), 'w')
     out.write('@HD\tVN:1.5\tSO:coordinate\n')
     for c in chroms:
         out.write('@SQ\tSN:%s\tLN:%d\n' % (c, chroms[c] * reso - 1))
@@ -185,17 +186,21 @@ def main():
 
     print('generating BAM')
     Popen('samtools sort -@ 8 -O BAM {} > {}'.format(
-        os_join(TEST_PATH, 'data', 'fake.sam'),
+        os_join(TEST_PATH, 'tmp', 'fake.sam'),
         os_join(TEST_PATH, 'data', 'fake.bam')),
           shell=True).communicate()
-    Popen('rm -f {}'.format(os_join(TEST_PATH, 'data', 'fake.sam')),
+    Popen('rm -f {}'.format(os_join(TEST_PATH, 'tmp', 'fake.sam')),
           shell=True).communicate()
     Popen('samtools index -@ 8 {}'.format(os_join(TEST_PATH, 'data', 'fake.bam')),
           shell=True).communicate()
 
-    Popen('tadbit normalize -w {}/tmp --bam {} -r {} --min_count {}'.format(
-        TEST_PATH, os_join(TEST_PATH, 'data', 'fake.bam'), reso, 0 if QUICK else 100),
-          shell=True).communicate()
+    Popen(('tadbit normalize -w {}/tmp --bam {} -r {} --min_count {} '
+           '--normalize_only').format(
+               TEST_PATH, os_join(TEST_PATH, 'data', 'fake.bam'), reso,
+               0 if QUICK else 100), shell=True).communicate()
+
+    Popen(("mv {0}/tmp/04_normalization/biases_*pickle "
+           "{0}/data/biases.pickle").format(TEST_PATH), shell=True).communicate()
 
     Popen('rm -rf {}/tmp'.format(TEST_PATH), shell=True).communicate()
 
