@@ -4,6 +4,7 @@
 
 from os.path     import split as os_split
 from collections import defaultdict, OrderedDict
+from copy        import deepcopy
 
 from argparse    import ArgumentParser
 try:  # python 3
@@ -106,15 +107,21 @@ def main():
             'sqr_nrm' : defaultdict(float),
             'passage' : defaultdict(int)}
 
-    if len(peak_files) > 1:
-        for _, _, group in peak_coord2:
-            groups[group] = {
-                'sum_raw' : defaultdict(int),
-                'sqr_raw' : defaultdict(int),
-                'sum_nrm' : defaultdict(float),
-                'sqr_nrm' : defaultdict(float),
-                'passage' : defaultdict(int)}
+    if not in_feature:
+        if len(peak_files) > 1 and :
+            for _, _, group in peak_coord2:
+                groups[group] = {
+                    'sum_raw' : defaultdict(int),
+                    'sqr_raw' : defaultdict(int),
+                    'sum_nrm' : defaultdict(float),
+                    'sqr_nrm' : defaultdict(float),
+                    'passage' : defaultdict(int)}
 
+        if len(groups) > 1:
+            kgroups = groups.keys()
+            groups = dict(((g1, g2), deepcopy(groups[g1]))
+                          for i, g1 in enumerate(kgroups)
+                          for g2 in kgroups[i:])
     if not silent:
         print((' - Total different (not same bin) and usable (not at chromosome'
                'ends) peaks in {}').format(peak_files[0]))
