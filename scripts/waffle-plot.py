@@ -8,7 +8,14 @@ try:  # python 3
 except ImportError:  # python 2
     from cPickle        import load
 
-from meta_waffle.plots import plot_waffle
+try:
+    from meta_waffle.plots import plot_waffle
+except ImportError:  # meta-waffle is not installed.. but it's still ok!!!
+    from os.path  import join as os_join
+    import sys
+
+    sys.path.insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
+    from plots      import plot_waffle
 
 
 def main():
