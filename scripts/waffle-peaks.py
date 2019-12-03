@@ -108,7 +108,7 @@ def main():
             'passage' : defaultdict(int)}
 
     if not in_feature:
-        if len(peak_files) > 1 and :
+        if len(peak_files) > 1:
             for _, _, group in peak_coord2:
                 groups[group] = {
                     'sum_raw' : defaultdict(int),
