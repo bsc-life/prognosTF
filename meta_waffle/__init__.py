@@ -93,7 +93,7 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
         range_ = [(x, p) for x, p in enumerate(range(beg, end))
                   if p not in badcols]
         if not range_:
-            bads.add(c, bs, f)
+            bads.add((c, bs, f))
             continue
         submatrices[beg, end] = range_
         coord_conv[c, bs] = beg, end
