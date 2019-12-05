@@ -55,7 +55,7 @@ def main():
     silent       = opts.silent
 
     fh = open(genomic_mat, 'r')
-    print(genomic_mat)
+
     chrom_sizes = OrderedDict()
     for line in fh:
         try:
@@ -70,6 +70,8 @@ def main():
         raise Exception(ERROR_INPUT)
 
     resolution = int(line.split('\t')[1])
+
+    genome_size = sum(chrom_sizes[c] // resolution + 1 for c in chrom_sizes)
 
     line = next(fh)
     if not line.startswith('# BADCOLS'):
@@ -94,8 +96,9 @@ def main():
 
     # define pairs of peaks
     printime(' - Parsing peaks', silent)
-    peak_coord1, peak_coord2, npeaks1, npeaks2 = parse_peaks(
-        peak_files, resolution, in_feature, chrom_sizes, windows_span)
+    peak_coord1, peak_coord2, npeaks1, npeaks2, submatrices, coord_conv = parse_peaks(
+        peak_files, resolution, in_feature, chrom_sizes, badcols, section_pos,
+        windows_span)
 
     # get the groups
     groups = {}
@@ -125,21 +128,23 @@ def main():
     if not silent:
         print((' - Total different (not same bin) and usable (not at chromosome'
                'ends) peaks in {}').format(peak_files[0]))
-    printime(('   - {} (out of {})').format(
+    printime(('   - {:,} (out of {:,})').format(
         len(peak_coord1), npeaks1), silent)
     if len(peak_files) > 1:
         print((' - Total different (not same bin) and usable (not at chromosome'
                'ends) peaks in {}').format(peak_files[1]))
-        printime(('   - {} (out of {})').format(
+        printime(('   - {:,} (out of {:,})').format(
             len(peak_coord2), npeaks2), silent)
 
     printime(' - Generating pairs of coordinates...', silent)
     pair_peaks = generate_pairs(peak_coord1, peak_coord2, resolution,
-                                windows_span, max_dist, window, section_pos)
+                                windows_span, max_dist, window, coord_conv)
 
     counter = defaultdict(int)
-    iter_pairs = submatrix_coordinates(pair_peaks, badcols,
-                                       (windows_span * 2) + 1, counter)
+    printime('   - {:,} pairs'.format(len(pair_peaks)), silent)
+    iter_pairs = submatrix_coordinates(pair_peaks,
+                                       windows_span * genome_size + 1,
+                                       submatrices, counter)
 
     # retrieve interactions at peak pairs using genomic matrix
     # sum them by feature and store them in dictionary

@@ -4,9 +4,11 @@
 """
 
 from collections import defaultdict
+from heapq       import heappush, heappop, heappushpop
 
 
-def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
+def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
+                section_pos, windows_span):
 
     def read_line_feature(line):
         '''
@@ -81,11 +83,29 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, windows_span):
     if len(peak_files) > 1:
         peaks2.close()
 
-    return bin_coordinate1, bin_coordinate2, npeaks1, npeaks2
+    submatrices = {}
+    coord_conv = {}
+    bads = set()
+    for c, bs, f in bin_coordinate1 + bin_coordinate2:
+        pos = section_pos[c][0] + bs
+        beg = pos - windows_span
+        end = pos + windows_span + 1
+        range_ = [(x, p) for x, p in enumerate(range(beg, end))
+                  if p not in badcols]
+        if not range_:
+            bads.add(c, bs, f)
+            continue
+        submatrices[beg, end] = range_
+        coord_conv[c, bs] = beg, end
+
+    bin_coordinate1 = [k for k in bin_coordinate1 if not k in bads]
+    bin_coordinate2 = [k for k in bin_coordinate2 if not k in bads]
+
+    return bin_coordinate1, bin_coordinate2, npeaks1, npeaks2, submatrices, coord_conv
 
 
 def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
-                   max_dist, window, section_pos):
+                   max_dist, window, coord_conv):
 
     wsp = (windows_span * 2) + 1
     mdr = max_dist / resolution
@@ -121,65 +141,50 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
     # smallest of each pair, and store it into a new list
     final_pairs = []
     for (chr1, bs1, f1), (chr2, bs2, f2) in pairs:
-        pos1 = section_pos[chr1][0] + bs1
-        pos2 = section_pos[chr2][0] + bs2
-
-        beg1 = pos1 - windows_span
-        end1 = pos1 + windows_span + 1
-        beg2 = pos2 - windows_span
-        end2 = pos2 + windows_span + 1
-
-        if beg1 > beg2:
-            beg1, end1, beg2, end2 = beg2, end2, beg1, end1
+        beg1, end1 = coord_conv[chr1, bs1]
+        beg2, end2 = coord_conv[chr2, bs2]
 
         what = f1 + f2
-        final_pairs.append((beg1, end1, beg2, end2, what))
+        if beg1 > beg2:
+            final_pairs.append((beg2, end2, beg1, end1, what))
+        else:
+            final_pairs.append((beg1, end1, beg2, end2, what))
 
-    final_pairs.sort()
-
-    return final_pairs
+    return sorted(final_pairs)
 
 
-def submatrix_coordinates(final_pairs, badcols, wsp, counter):
+def submatrix_coordinates(final_pairs, wsp, submatrices, counter):
     '''
     Input BED file(s) of ChIP peaks and bin into desired resolution of Hi-C
     '''
-
     # get all combinations of bin peaks:
     # - same chromosomes
     # - Not overlapping peaks, windows span added to bin*2 (wsp)
     # - below max_dist
     # - Different combination of the features
 
-
     # in buf we store a list of coordinates to be yielded
     # when buf spans for twice the window span we sort it and empty it
+
     buf = []
-    buf_beg = 0
     for beg1, end1, beg2, end2, what in final_pairs:
-        range1 = [(x, p1) for x, p1 in enumerate(range(beg1, end1))
-                  if p1 not in badcols]
-        range2 = [(y, p2) for y, p2 in enumerate(range(beg2, end2))
-                  if p2 not in badcols]
-
-        if not range1 or not range2:
-            continue
         counter[what] +=1
-        for x, p1 in range1:
+        range2 = submatrices[beg2, end2]
+        for x, p1 in submatrices[beg1, end1]:
             for y, p2 in range2:
-                buf.append(((p1, p2), x, y, what))
+                heappush(buf, ((p1, p2), x, y, what))
+        if len(buf) >= wsp: # need more: genome size times window height
+            break
 
-        if end1 - buf_beg > wsp:
-            buf.sort()
-            top = end1 - wsp
-            p1 = min(buf)[0][0]
-            while p1 < top:
-                (p1, p2), x, y, what = buf.pop(0)
-                yield (p1, p2), x, y, what
-            buf_beg = p1
-    buf.sort()
+    for beg1, end1, beg2, end2, what in final_pairs[sum(counter.values()):]:
+        counter[what] +=1
+        range2 = submatrices[beg2, end2]
+        for x, p1 in submatrices[beg1, end1]:
+            for y, p2 in range2:
+                yield heappushpop(buf, ((p1, p2), x, y, what))
+
     while buf:
-        yield buf.pop(0)
+        yield heappop(buf)
 
 
 def readfiles(genomic_file, iter_pairs):
