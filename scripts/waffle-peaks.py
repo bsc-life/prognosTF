@@ -78,9 +78,9 @@ def main():
         raise Exception(ERROR_INPUT)
 
     try:
-        badcols = map(int, line.split('\t')[1].split(','))
+        badcols = set(list(map(int, line.split('\t')[1].split(','))))
     except ValueError:
-        badcols = {}
+        badcols = set()
 
     if window not in  ['inter', 'intra', 'all']:
         window = [int(x) / resolution for x in window.split('-')]
