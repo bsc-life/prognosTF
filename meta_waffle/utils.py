@@ -7,7 +7,10 @@ from datetime    import datetime
 from time        import time
 from collections import OrderedDict
 
-from pysam       import AlignmentFile
+try:
+    from pysam       import AlignmentFile
+except ImportError:
+    print('WARNING: pysam not found.')
 
 
 def parse_fasta(infasta):
