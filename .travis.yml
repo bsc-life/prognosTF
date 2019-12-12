@@ -3,7 +3,6 @@ sudo: false
 
 python:
   - "2.7"
-  - "3.4"
   - "3.6"
 
 cache:
@@ -28,16 +27,12 @@ install:
     - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pip numpy matplotlib scipy
     - source activate test-environment
     - yes | python setup.py install
-    - conda install -y -q -c https://conda.anaconda.org/bcbio pysam
+    - conda install -y -q -c bioconda pysam
     - pip install coveralls
 
 before_script:
   # Ensure tags are available on the cloned repository
   - git fetch --tags --depth=50
-
-  # Start xvfb
-  - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start"
 
 script:
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then python test/Simulate_HiC.py ; fi

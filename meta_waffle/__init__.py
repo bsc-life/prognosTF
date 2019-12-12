@@ -195,9 +195,9 @@ def readfiles(genomic_file, iter_pairs):
             break
     a, b, raw, nrm = line.split('\t')
     pos1 = (int(a), int(b))
-    pos2, x, y, group = next(iter_pairs)
 
     try:
+        pos2, x, y, group = next(iter_pairs)
         while True:
             if pos2 > pos1:
                 a, b, raw, nrm = next(fh1).split('\t')
