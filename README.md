@@ -1,7 +1,7 @@
 # metawaffle to PrognoTF
 
-![](https://travis-ci.org/bsc-life/prognosTF.svg?branch=master)
-![](https://coveralls.io/repos/github/bsc-life/prognosTF/badge.svg?branch=master)
+[![Travis-CI](https://travis-ci.org/bsc-life/prognosTF.svg?branch=master)](https://travis-ci.org/bsc-life/prognosTF)
+[![Coveralls](https://coveralls.io/repos/github/bsc-life/prognosTF/badge.svg?branch=master)](https://coveralls.io/github/bsc-life/prognosTF)
 
 ## Requirements
 
