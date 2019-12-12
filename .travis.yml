@@ -26,7 +26,7 @@ install:
     # Replace dep1 dep2 ... with your dependencies
     - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pip numpy matplotlib scipy
     - source activate test-environment
-    - yes | python setup.py install
+    - yes | pip install -e .
     - conda install -y -q -c bioconda pysam
     - pip install coveralls
 
@@ -39,7 +39,7 @@ script:
 
   - cd test; ls -l *; if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then bash test_meta_waffle.sh; cd - ; fi
   - python -m unittest meta_waffle.test.test_all
-  - coverage run -m metawaffle.test.test_all
+  - coverage run -m meta_waffle.test.test_all
 
 after_success:
   - coveralls
