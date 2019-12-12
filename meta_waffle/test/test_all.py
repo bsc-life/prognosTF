@@ -15,8 +15,6 @@ from meta_waffle       import submatrix_coordinates, interactions_at_intersectio
 
 
 TEST_PATH = os_join(os_split(os_split(os_split(__file__)[0])[0])[0], 'test')
-print('HOOOOOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLAAAAAAAAAAA')
-print(TEST_PATH)
 RESOLUTION = 10000
 WINDOWS_SPAN = 4
 (SECTION_POS, CHROM_SIZES, BINS, PEAK_COORD1, PEAK_COORD2,
