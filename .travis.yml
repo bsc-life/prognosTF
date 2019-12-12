@@ -37,7 +37,7 @@ before_script:
 script:
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then python test/Simulate_HiC.py ; fi
 
-  - cd test; ls -l *; if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then bash test_meta_waffle.sh; cd - ; fi
+  # - cd test; ls -l *; if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then bash test_meta_waffle.sh; cd - ; fi
   - python -m unittest meta_waffle.test.test_all
   - coverage run -m meta_waffle.test.test_all
 
