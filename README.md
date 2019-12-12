@@ -1,4 +1,7 @@
-# meta Waffle
+# metawaffle to PrognoTF
+
+![](https://travis-ci.org/bsc-life/prognosTF.svg?branch=master)
+![](https://coveralls.io/repos/github/bsc-life/prognosTF/badge.svg?branch=master)
 
 ## Requirements
 
