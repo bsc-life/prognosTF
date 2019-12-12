@@ -31,13 +31,7 @@ def parse_fasta(infasta):
 
 
 def chromosome_from_bam(inbam, resolution, get_bins=False):
-    try:  # python 2
-        bamfile = AlignmentFile(inbam, 'rb')
-    except:   # python 3
-        print("HOHOOOOOOOOOOOOOOOOOOOOOOOLLLLLLLLAAAAAAAAAA")
-        print(os.path.exists(inbam))
-        print(inbam)
-        bamfile = AlignmentFile(inbam, 'r')
+    bamfile = AlignmentFile(inbam, 'rb')
     chrom_sizes = OrderedDict()
     for i, c in enumerate(bamfile.references):
         chrom_sizes[c] = bamfile.lengths[i]
