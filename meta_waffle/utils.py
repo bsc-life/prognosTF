@@ -34,7 +34,7 @@ def chromosome_from_bam(inbam, resolution, get_bins=False):
     try:  # python 2
         bamfile = AlignmentFile(inbam, 'rb')
     except:   # python 3
-        bamfile = AlignmentFile(inbam)
+        bamfile = AlignmentFile(inbam, 'r')
     chrom_sizes = OrderedDict()
     for i, c in enumerate(bamfile.references):
         chrom_sizes[c] = bamfile.lengths[i]
