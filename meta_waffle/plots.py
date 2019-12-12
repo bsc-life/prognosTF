@@ -3,7 +3,9 @@
 from scipy import stats, odr
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
+import pysal
 
 # from serutils.stats.correlate import fit_with_uncertainty, latex_formula
 
@@ -158,9 +160,9 @@ def plot_polar_waffle(matrix, size, divs=20000, resolution=1, axe=None):
     m = axr.pcolormesh(Phi, R, data, linewidth=0)
     plt.colorbar(m, shrink=0.4, label='Averaged normalized interactions')
     yticks = np.asarray([0] + axr.get_yticks())
-    axr.plot([0, 0, -np.pi / 2], [size, 0, size], 'k--', alpha=0.4, lw=1)
+    axr.plot([-np.pi, 0, -np.pi / 2], [size, 0, size], 'k--', alpha=0.4, lw=1)
 
-    axr.text(0         , size, ' peak', va='center')
+    axr.text(-np.pi    , size, 'peak ' , ha='right' , va='center')
     axr.text(-np.pi / 2, size, '\npeak', ha='center', va='top')
 
     axr.set_yticks(yticks)
@@ -171,23 +173,44 @@ def plot_polar_waffle(matrix, size, divs=20000, resolution=1, axe=None):
     axr.set_rlabel_position(45)
 
 
-def correlate_distances(matrix, size):
+def correlate_distances(matrix, size, metric='loop'):
     mid = size // 2
     xvals = []
     yvals = []
+    averages =[[], []]
     for i in range(size):
         di = abs(mid - i)
         for j in range(size):
             dj = abs(mid - j)
             xvals.append(di + dj)
             yvals.append(matrix[i][j])
+            if i <= mid and j <= mid:
+                averages[0].append(((i, j), xvals[-1], yvals[-1]))
+            else:
+                averages[1].append(((i, j), xvals[-1], yvals[-1]))
     xvals = np.asarray(xvals)
     yvals = np.asarray(yvals)
 
     spear, pval = stats.spearmanr(xvals, yvals)
 
-    x = size**0.5 - xvals**0.5
-    y = yvals
+    if metric == 'normal':
+        x = size**0.5 - xvals**0.5
+        x1 = x
+        x2 = []
+        y = (yvals - np.mean(yvals)) / np.std(yvals)
+        y1 = y
+        y2 = []
+    elif metric == 'loop':
+        x1 = [size**0.5 - v**0.5 for _, v, _ in averages[0]]
+        y1 = np.asarray([v for _, _, v in averages[0]])
+        y1 = (y1 - np.mean(y1)) / np.std(y1)
+
+        x2 = [size**0.5 - v**0.5 for _, v, _ in averages[1]]
+        y2 = np.asarray([v for _, _, v in averages[1]])
+        y2 = (y2 - np.mean(y2)) / np.std(y2)
+
+        x = x1 + x2
+        y = list(y1) + list(y2)
 
     z, _ = curve_fit(func, x, y, [1., 1.])
 
@@ -314,51 +337,65 @@ def plot_correlation(spear, pval, x, y, p_x, p_y, z, confs, preds,
     axl.grid()
 
 
-def get_MI(matrix, counter, width=2, loop=False, seed=1):
+def get_MI(matrix, width=2, loop=False, seed=1):
     """
     Computing the Moran Index for each matrix cell
     -
-    Moran Index is a measure of multi-dimensional spatial correlation. 
-    - A positive I value indicates that the feature is surrounded by features with similar values; part of a cluster.
-    - A negative I value indicates that the feature is surrounded by features with dissimilar values; an outlier. 
-    The Local Moran's index can only be interpreted within the context of the computed Z score or p-value. 
+    Moran Index is a measure of multi-dimensional spatial correlation.
+    - A positive I value indicates that the feature is surrounded by features with similar values
+      -> part of a cluster.
+    - A negative I value indicates that the feature is surrounded by features with dissimilar values
+      -> an outlier.
+    The Local Moran's index can only be interpreted within the context of the computed Z score or p-value.
     """
-    stats= {}
+    mi_stats= {}
     size = len(matrix)
-    stats['size'] = size
+    mi_stats['size'] = size
     matrixlog2 = np.log2(matrix)
-    
+
     # Using random_seed to block the Moran Index one, and get consistency with all experiments
     np.random.seed(seed)
 
-    n, ws = get_weights(matrix=matrix, counter=counter, size=size, width=width, loop=loop)
-    
-    w = pysal.lib.weights.weights.W(n, ws)
-    lm = pysal.explore.esda.Moran_Local([[matrixlog2[i][j] for i in range(size)] for j in range(size)],  
-                                        w, permutations=9999)
-    
-    stats["moranI locals"] = lm.p_sim, lm.q
-    
-    gm = pysal.explore.esda.moran.Moran([[matrixlog2[i][j] for i in range(size)] for j in range(size)],  
-                                        w, permutations=9999)
-    
-    stats["moranI global"] = gm.I, (gm.VI_rand, gm.seI_rand, gm.z_rand, gm.p_rand)
-   
-    return stats
+    n, ws = get_weights(matrix=matrix, size=size, width=width, loop=loop)
+
+    w = pysal.weights.W(n, ws)
+    lm = pysal.esda.moran.Moran_Local([[matrixlog2[i][j] for i in range(size)]
+                                       for j in range(size)],
+                                      w, permutations=9999)
+
+    mi_stats["moranI locals"] = lm.p_sim, lm.q
+
+    gm = pysal.esda.moran.Moran([[matrixlog2[i][j] for i in range(size)]
+                                 for j in range(size)],
+                                w, permutations=9999)
+
+    mi_stats["moranI global"] = gm.I, (gm.VI_rand, gm.seI_rand, gm.z_rand, gm.p_rand)
+
+    return mi_stats
 
 
-def get_weights(matrix, counter, size, width=2, loop=False):
+def get_weights(matrix, size, width=2, loop=False):
     """
-    Computing the weight of each matrix position in relation to the central cell, which is the maximum.
+    Computing the weight of each matrix position in relation to the central cell,
+    which is the maximum.
     """
     n = {}
     ws = {}
+    hwidth = width / 2.
+    ihwidth = 1 + 1. / hwidth
+    # Going to negative values; degree of correlation + non-correlation
+    if loop:
+        calculus = lambda x, y: (ihwidth - x / hwidth) * y
+    # Using only positive values; degree of correlation
+    else:
+        calculus = lambda x, y: 1 / x * y
     for i in range(size):
         for j in range(size):
             b = i + j * size
             n[b] = []
             ws[b] = []
-            for k in range(-width, width+1):
+            val = matrix[i][j]
+            for k in range(-width, width + 1):
                 if i + k >= size or i + k < 0:
                     continue
                 for l in range(-width, width+1):
@@ -366,19 +403,11 @@ def get_weights(matrix, counter, size, width=2, loop=False):
                         continue
                     c = i + k + (j + l) * size
                     n[b].append(c)
-                    diff = max(abs(k), abs(l))
-                    
-                    # Going to negative values; degree of correlation + non-correlation
-                    if loop:
-                        ws[b].append((1. + 1. / (width / 2.) - diff / (width / 2.)) * (matrix[i][j]/counter))
-                        
-                    # Using only positive values; degree of correlation
-                    else:
-                        ws[b].append(1 / diff * (matrix[i][j]/counter))
+                    ws[b].append(calculus(max(abs(k), abs(l)), val))
     return n, ws
 
 
-def plot_MoranI(matrix, counter, width=2, plot=True, output=None, axe=None):
+def plot_MoranI(waffle, width=2, plot=True, output=None, axe=None):
     """
     Visualizing the computed Moran Index with average submatrices between peaks
     -
@@ -388,12 +417,18 @@ def plot_MoranI(matrix, counter, width=2, plot=True, output=None, axe=None):
         HL = An outlier in which a high value is surround primarily by low values
         LH = An outlier in which a low value is surrounded primarily by high values
     """
-    
+
     ## MORAN INDEX
-    
-    stats = get_MI(matrix=matrix, counter=counter, width=width, loop=False)
-    Moran_I, (VI_rand, seI_rand, z_rand, p_rand) = stats['moranI global']
-    
+    size       = waffle['size']
+    counter    = waffle['counter']
+
+    matrix = [[waffle['sum_nrm'][i, j] / counter
+               for i in range(size)]
+              for j in range(size)]
+
+    mi_stats = get_MI(matrix=matrix, width=width, loop=False)
+    Moran_I, (VI_rand, seI_rand, z_rand, p_rand) = mi_stats['moranI global']
+
     if not plot:
         return Moran_I, (VI_rand, seI_rand, z_rand, p_rand)
 
@@ -406,17 +441,17 @@ def plot_MoranI(matrix, counter, width=2, plot=True, output=None, axe=None):
     x = []
     y = []
     c = []
-    size = stats['size']
-    
+    size = mi_stats['size']
+
     for pvc in [0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001]:
-        for k, pv in enumerate(stats['moranI locals'][0]):
+        for k, pv in enumerate(mi_stats['moranI locals'][0]):
             if pv > pvc:
-                continue 
+                continue
             i, j = divmod(k, size)
             x.append(i)
             y.append(j)
-            c.append(colors[stats['moranI locals'][1][k]-1])
-            
+            c.append(colors[mi_stats['moranI locals'][1][k]-1])
+
     im = axl.imshow(np.log2(matrix), interpolation='None', origin='lower', cmap='Greys')
     axl.scatter(x, y, alpha=0.15, color=c)
 
@@ -424,14 +459,14 @@ def plot_MoranI(matrix, counter, width=2, plot=True, output=None, axe=None):
     cyan_patch = mpatches.Patch(color=colors[1], label='Low value is surrounded by high values')
     blue_patch = mpatches.Patch(color=colors[2], label='Low values')
     orange_patch = mpatches.Patch(color=colors[3], label='High value is surround by low values')
-    
+
     axl.legend(handles=[red_patch, blue_patch, orange_patch, cyan_patch], ncol=2,
                loc='upper center', bbox_to_anchor=(0.5, -0.075), frameon=False,
-              title='Global Moran index: {:.2f}   p-val (rand): {:.3e}'.format(Moran_I, p_rand))
+               title='Global Moran index: {:.2f}   p-val (rand): {:.3e}'.format(Moran_I, p_rand))
     axl.set_xlim(-0.5, size - 0.5)
     axl.set_ylim(-0.5, size - 0.5)
     plt.colorbar(im, ax=axl)
-        
+
     ## SAVE
     if output:
         plt.savefig(output, format=output.split('.')[-1])
