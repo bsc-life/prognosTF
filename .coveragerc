@@ -1,0 +1,19 @@
+[run]
+omit =
+    */meta_waffle/test/*
+    
+    # There are no GUI tests
+    */meta_waffle/__init__.py
+    */meta_waffle/utils.py
+    */meta_waffle/plots.py
+      
+source = meta_waffle
+branch = True
+include =  */meta_waffle/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
