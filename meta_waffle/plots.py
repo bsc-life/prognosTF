@@ -359,13 +359,13 @@ def get_MI(matrix, width=2, loop=False, seed=1):
     n, ws = get_weights(matrix=matrix, size=size, width=width, loop=loop)
 
     w = pysal.lib.weights.weights.W(n, ws)
-    lm = pysal.esda.moran.Moran_Local([[matrixlog2[i][j] for i in range(size)]
+    lm = pysal.explore.esda.Moran_Local([[matrixlog2[i][j] for i in range(size)]
                                        for j in range(size)],
                                       w, permutations=9999)
 
     mi_stats["moranI locals"] = lm.p_sim, lm.q
 
-    gm = pysal.esda.moran.Moran([[matrixlog2[i][j] for i in range(size)]
+    gm = pysal.explore.esda.moran.Moran([[matrixlog2[i][j] for i in range(size)]
                                  for j in range(size)],
                                 w, permutations=9999)
 
