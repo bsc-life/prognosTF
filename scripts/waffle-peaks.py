@@ -5,6 +5,8 @@
 from os.path     import split as os_split
 from collections import defaultdict, OrderedDict
 from copy        import deepcopy
+from gzip import open as gzip_open
+from shutil import copyfileobj
 
 from argparse    import ArgumentParser
 try:  # python 3
@@ -51,7 +53,7 @@ def main():
     window       = opts.window
     genomic_mat  = opts.genomic_mat
     in_feature   = opts.first_is_feature
-    submatrices  = opts.submatrices
+    submatrix_path  = opts.submatrix_path
     silent       = opts.silent
 
     fh = open(genomic_mat, 'r')
@@ -92,7 +94,7 @@ def main():
 
     # get chromosome coordinates and conversor genomic coordinate to bins
     section_pos, chrom_sizes, bins = chromosome_from_header(
-        chrom_sizes, resolution, get_bins=submatrices!='')
+        chrom_sizes, resolution, get_bins=submatrix_path!='')
 
     # define pairs of peaks
     printime(' - Parsing peaks', silent)
@@ -149,12 +151,24 @@ def main():
     # retrieve interactions at peak pairs using genomic matrix
     # sum them by feature and store them in dictionary
     printime(' - Reading genomic matrix and peaks', silent)
-    interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins)
+    interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrix_path, bins)
 
     printime(' - Subatrices extracted by category:', silent)
     if not silent:
         for group in groups:
             print('    - {:<10} : {:>15}'.format(group if group else 'Total', counter[group]))
+
+
+    # compressing submatrix file
+    import os # already imported some functions, but more needed
+    
+    comp_submatrix_path = "{}.gz".format(submatrix_path)
+    with open(submatrix_path, 'rb') as f_in:
+        with gzip_open(comp_submatrix_path, 'wb') as f_out:
+            copyfileobj(f_in, f_out)
+
+    if os.path.exists(comp_submatrix_path):
+        os.remove(submatrix_path)
 
 
     # add the counts of pairs per waffle
@@ -196,7 +210,7 @@ def get_options():
     #                     help='wanted resolution from generated matrix')
     parser.add_argument('-o', '--outfile', dest='outfile', default='',
                         metavar='PATH', help='path to output file (pickle format)')
-    parser.add_argument('--all_submatrices', dest='submatrices', default='',
+    parser.add_argument('--all_submatrices', dest='submatrix_path', default='',
                         metavar='PATH', help='''if PATH is provided here, stores
                         all the individual submatrices generated''')
     parser.add_argument('-s', dest='windows_span', required=True, type=int,

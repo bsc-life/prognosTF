@@ -232,7 +232,7 @@ def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, b
             groups[group]['sum_nrm'][x, y] += nrm
             groups[group]['sqr_nrm'][x, y] += nrm**2
             groups[group]['passage'][x, y] += 1
-            write_submatrices(X, Y, x, y, raw, nrm, group)
+            write_submatrices(X, Y, x, y, raw, round(nrm,3), group)
         out.close()
     else:
         for (X, Y), x, y, raw, nrm, group in readfiles_iterator:

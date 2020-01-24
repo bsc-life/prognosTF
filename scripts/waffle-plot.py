@@ -12,6 +12,7 @@ try:
     from meta_waffle.plots import plot_waffle
 except ImportError:  # meta-waffle is not installed.. but it's still ok!!!
     from os.path  import join as os_join
+    from os.path import split as os_split
     import sys
 
     sys.path.insert(0, os_join(os_split(os_split(__file__)[0])[0], 'meta_waffle'))
