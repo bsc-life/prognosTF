@@ -7,7 +7,7 @@ from collections import defaultdict
 from heapq       import heappush, heappop, heappushpop
 
 
-def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
+def parse_peaks(peak_files, resolution, in_feature, both_features, chrom_sizes, badcols,
                 section_pos, windows_span):
 
     def read_line_feature(line):
@@ -105,10 +105,9 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
 
 
 def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
-                   max_dist, window, coord_conv):
+                   max_dist, window, coord_conv, both_features):
 
     wsp = (windows_span * 2) + 1
-    mdr = max_dist / resolution
 
     # put pairs in intervals
     if window == 'inter':
@@ -116,16 +115,16 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
                              and a != b)
     elif window == 'intra':
         test = lambda a, b: (a[0] == b[0]
-                             and wsp <= abs(b[1] - a[1]) <= mdr
+                             and wsp <= abs(b[1] - a[1])
                              and a != b)
     elif window == 'all':
         test = lambda a, b: ((a[0] == b[0]
-                              and wsp <= abs(b[1] - a[1]) <= mdr
+                              and wsp <= abs(b[1] - a[1])
                               and a != b) or (a[0] != b[0] and a != b))
     else:
         lower, upper = window
         test = lambda a, b: (a[0] == b[0]
-                             and wsp <= abs(b[1] - a[1]) <= mdr
+                             and wsp <= abs(b[1] - a[1])
                              and a != b
                              and lower < abs(a[1] - b[1]) <= upper)
 
@@ -145,15 +144,18 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
         beg2, end2 = coord_conv[chr2, bs2]
 
         what = f1 + f2
+        what_new = ''
+        if both_features:
+            what_new = "{}:{}-{}:{}".format(chr1, bs1, chr2, bs2)
         if beg1 > beg2:
-            final_pairs.append((beg2, end2, beg1, end1, what))
+            final_pairs.append((beg2, end2, beg1, end1, what, what_new))
         else:
-            final_pairs.append((beg1, end1, beg2, end2, what))
+            final_pairs.append((beg1, end1, beg2, end2, what, what_new))
 
     return sorted(final_pairs)
 
 
-def submatrix_coordinates(final_pairs, wsp, submatrices, counter):
+def submatrix_coordinates(final_pairs, wsp, submatrices, counter, both_features):
     '''
     Input BED file(s) of ChIP peaks and bin into desired resolution of Hi-C
     '''
@@ -167,21 +169,27 @@ def submatrix_coordinates(final_pairs, wsp, submatrices, counter):
     # when buf spans for twice the window span we sort it and empty it
 
     buf = []
-    for beg1, end1, beg2, end2, what in final_pairs:
-        counter[what] +=1
+    for beg1, end1, beg2, end2, what, what_new in final_pairs:
+        if both_features:
+            counter['']+=1
+        else:
+            counter[what] +=1
         range2 = submatrices[beg2, end2]
         for x, p1 in submatrices[beg1, end1]:
             for y, p2 in range2:
-                heappush(buf, ((p1, p2), x, y, what))
+                heappush(buf, ((p1, p2), x, y, what, what_new))
         if len(buf) >= wsp: # need more: genome size times window height
             break
 
-    for beg1, end1, beg2, end2, what in final_pairs[sum(counter.values()):]:
-        counter[what] +=1
+    for beg1, end1, beg2, end2, what, what_new in final_pairs[sum(counter.values()):]:
+        if both_features:
+            counter['']+=1
+        else:
+            counter[what] +=1
         range2 = submatrices[beg2, end2]
         for x, p1 in submatrices[beg1, end1]:
             for y, p2 in range2:
-                yield heappushpop(buf, ((p1, p2), x, y, what))
+                yield heappushpop(buf, ((p1, p2), x, y, what, what_new))
 
     while buf:
         yield heappop(buf)
@@ -197,7 +205,7 @@ def readfiles(genomic_file, iter_pairs):
     pos1 = (int(a), int(b))
 
     try:
-        pos2, x, y, group = next(iter_pairs)
+        pos2, x, y, group, what_new = next(iter_pairs)
         while True:
             if pos2 > pos1:
                 a, b, raw, nrm = next(fh1).split('\t')
@@ -205,39 +213,58 @@ def readfiles(genomic_file, iter_pairs):
             elif pos1 == pos2:
                 raw = int(raw)
                 nrm = float(nrm)
-                yield pos1, x, y, raw, nrm, group
-                pos2, x, y, group = next(iter_pairs)
+                yield pos1, x, y, raw, nrm, group, what_new
+                pos2, x, y, group, what_new = next(iter_pairs)
                 if pos1 != pos2:  # some cells in the peak file are repeated
                     a, b, raw, nrm = next(fh1).split('\t')
                     pos1 = (int(a), int(b))
             else:
-                pos2, x, y, group = next(iter_pairs)
+                pos2, x, y, group, what_new = next(iter_pairs)
     except StopIteration:
         fh1.close()
 
 
-def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins):
-    def write_submatrices(X, Y, x, y, raw, nrm, group):
+def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins, both_features):
+    def write_submatrices(X, Y, x, y, raw, nrm, group, what_new):
         c1, b1 = bins[X]
         c2, b2 = bins[Y]
-        out.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-            c1, b1, c2, b2, x, y, raw, nrm, group))
+        out.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+            c1, b1, c2, b2, x, y, raw, nrm, group, what_new))
 
     readfiles_iterator = readfiles(genomic_mat, iter_pairs)
-    if bins:
-        out = open(submatrices, 'w')
-        for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
-            groups[group]['sum_raw'][x, y] += raw
-            groups[group]['sqr_raw'][x, y] += raw**2
-            groups[group]['sum_nrm'][x, y] += nrm
-            groups[group]['sqr_nrm'][x, y] += nrm**2
-            groups[group]['passage'][x, y] += 1
-            write_submatrices(X, Y, x, y, raw, round(nrm,3), group)
-        out.close()
+    if both_features:
+        if bins:
+            out = open(submatrices, 'w')
+            for (X, Y), x, y, raw, nrm, group, what_new in readfiles_iterator:
+                groups['']['sum_raw'][x, y] += raw
+                groups['']['sqr_raw'][x, y] += raw**2
+                groups['']['sum_nrm'][x, y] += nrm
+                groups['']['sqr_nrm'][x, y] += nrm**2
+                groups['']['passage'][x, y] += 1
+                write_submatrices(X, Y, x, y, raw, round(nrm,3), group, what_new)
+            out.close()
+        else:
+            for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+                groups['']['sum_raw'][x, y] += raw
+                groups['']['sqr_raw'][x, y] += raw**2
+                groups['']['sum_nrm'][x, y] += nrm
+                groups['']['sqr_nrm'][x, y] += nrm**2
+                groups['']['passage'][x, y] += 1
     else:
-        for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
-            groups[group]['sum_raw'][x, y] += raw
-            groups[group]['sqr_raw'][x, y] += raw**2
-            groups[group]['sum_nrm'][x, y] += nrm
-            groups[group]['sqr_nrm'][x, y] += nrm**2
-            groups[group]['passage'][x, y] += 1
+        if bins:
+            out = open(submatrices, 'w')
+            for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+                groups[group]['sum_raw'][x, y] += raw
+                groups[group]['sqr_raw'][x, y] += raw**2
+                groups[group]['sum_nrm'][x, y] += nrm
+                groups[group]['sqr_nrm'][x, y] += nrm**2
+                groups[group]['passage'][x, y] += 1
+                write_submatrices(X, Y, x, y, raw, round(nrm,3), group, what_new)
+            out.close()
+        else:
+            for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+                groups[group]['sum_raw'][x, y] += raw
+                groups[group]['sqr_raw'][x, y] += raw**2
+                groups[group]['sum_nrm'][x, y] += nrm
+                groups[group]['sqr_nrm'][x, y] += nrm**2
+                groups[group]['passage'][x, y] += 1

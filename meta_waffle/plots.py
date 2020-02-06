@@ -5,7 +5,15 @@ from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
-import pysal
+try:  # pysal 1.14
+    from pysal import weights as pysal_weights
+    from pysal.esda import moran
+except ImportError:
+    try:  # pysal 2.0
+        from pysal.lib import weights as pysal_weights
+        from pysal.explore.esda import moran
+    except ImportError:
+        print('WARNING: PYSAL not installed')
 
 # from serutils.stats.correlate import fit_with_uncertainty, latex_formula
 
@@ -209,8 +217,8 @@ def correlate_distances(matrix, size, metric='loop'):
         y2 = np.asarray([v for _, _, v in averages[1]])
         y2 = (y2 - np.mean(y2)) / np.std(y2)
 
-        x = x1 + x2
-        y = list(y1) + list(y2)
+        x = np.asarray(x1 + x2)
+        y = np.asarray(list(y1) + list(y2))
 
     z, _ = curve_fit(func, x, y, [1., 1.])
 
@@ -265,7 +273,7 @@ def plot_waffle(waffle, title, output=None, plot=True, axe=None):
     counter    = waffle['counter']
 
     matrix = [[waffle['sum_nrm'][i, j] / counter
-               for i in range(size)]
+               for i in range(size)[::-1]]
               for j in range(size)]
 
     if not plot:
@@ -358,14 +366,14 @@ def get_MI(matrix, width=2, loop=False, seed=1):
 
     n, ws = get_weights(matrix=matrix, size=size, width=width, loop=loop)
 
-    w = pysal.lib.weights.weights.W(n, ws)
-    lm = pysal.explore.esda.Moran_Local([[matrixlog2[i][j] for i in range(size)]
+    w = pysal_weights.W(n, ws)
+    lm = moran.Moran_Local([[matrixlog2[i][j] for i in range(size)]
                                        for j in range(size)],
                                       w, permutations=9999)
 
     mi_stats["moranI locals"] = lm.p_sim, lm.q
 
-    gm = pysal.explore.esda.moran.Moran([[matrixlog2[i][j] for i in range(size)]
+    gm = moran.Moran([[matrixlog2[i][j] for i in range(size)]
                                  for j in range(size)],
                                 w, permutations=9999)
 
