@@ -4,8 +4,7 @@
 import os
 from collections import defaultdict, OrderedDict
 from copy        import deepcopy
-from gzip        import open as gzip_open
-from shutil      import copyfileobj
+#from shutil      import copyfileobj
 
 from argparse    import ArgumentParser
 try:  # python 3
@@ -54,7 +53,7 @@ def main():
     in_feature   = opts.first_is_feature
     both_features  = opts.both_are_feature
     submatrix_path  = opts.submatrix_path
-    compress = opts.compress
+    #compress = opts.compress
     silent       = opts.silent
 
     fh = open(genomic_mat, 'r')
@@ -100,8 +99,8 @@ def main():
     # define pairs of peaks
     printime(' - Parsing peaks', silent)
     peak_coord1, peak_coord2, npeaks1, npeaks2, submatrices, coord_conv = parse_peaks(
-        peak_files, resolution, in_feature, both_features, chrom_sizes, badcols, section_pos,
-        windows_span)
+        peak_files, resolution, in_feature, chrom_sizes, badcols, section_pos,
+        windows_span, both_features)
 
     # get the groups
     groups = {}
@@ -164,25 +163,13 @@ def main():
     # retrieve interactions at peak pairs using genomic matrix
     # sum them by feature and store them in dictionary
     printime(' - Reading genomic matrix and peaks', silent)
-    interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrix_path, bins, both_features)
+    window_size = (windows_span * 2) + 1
+    interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrix_path, bins, window_size, both_features)
 
     printime(' - Submatrices extracted by category:', silent)
     if not silent:
         for group in groups:
             print('    - {:<10} : {:>15}'.format(group if group else 'Total', counter[group]))
-
-
-    # compress all_submatrices file
-    if compress:
-        printime(' - Submatrices compressing', silent)  
-        comp_submatrix_path = "{}.gz".format(submatrix_path)
-        
-        with open(submatrix_path, 'rb') as f_in:
-            with gzip_open(comp_submatrix_path, 'wb') as f_out:
-                copyfileobj(f_in, f_out)
-
-        if os.path.exists(comp_submatrix_path):
-            os.remove(submatrix_path)
 
 
     # add the counts of pairs per waffle
@@ -231,10 +218,7 @@ def get_options():
                         metavar='PATH', help='path to output file (pickle format)')
     parser.add_argument('--all_submatrices', dest='submatrix_path', default='',
                         metavar='PATH', help='''if PATH is provided here, stores
-                        all the individual submatrices generated''')
-    parser.add_argument('--compress', dest='compress', default=False,
-                        action='store_true', help='''if COMPRESS is selected,
-                         all submatrices are saved in gzip format''')    
+                        all the individual submatrices generated''') 
     parser.add_argument('-s', dest='windows_span', required=True, type=int,
                         metavar='INT',
                         help='''Windows span around center of the peak (in bins; the
@@ -258,8 +242,8 @@ def get_options():
     parser.add_argument('--both_are_feature', dest='both_are_feature', default=False,
                         action='store_true', help='''When 2 BED files are input,
                         both BED peaks should be considered as feature.
-                        This is to create average sub-matrices for
-                        each combination of pair of peaks BED file.''')
+                        Together with --all_submatrices, it creates an average sub-matrices
+                        for each pair of peaks and outputs a compress file ''')
     parser.add_argument('--silent', dest='silent', default=False,
                         action='store_true', help='''shhhhhhttt''')                    
 

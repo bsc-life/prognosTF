@@ -5,10 +5,11 @@
 
 from collections import defaultdict
 from heapq       import heappush, heappop, heappushpop
+from gzip        import open as gzip_open
 
 
-def parse_peaks(peak_files, resolution, in_feature, both_features, chrom_sizes, badcols,
-                section_pos, windows_span):
+def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
+                section_pos, windows_span, both_features):
 
     def read_line_feature(line):
         '''
@@ -145,14 +146,19 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
 
         what = f1 + f2
         what_new = ''
-        if both_features:
-            what_new = "{}:{}-{}:{}".format(chr1, bs1, chr2, bs2)
+
         if beg1 > beg2:
+            if both_features:
+                what_new = "{}:{}-{}:{}".format(chr2, bs2, chr1, bs1)
             final_pairs.append((beg2, end2, beg1, end1, what, what_new))
+
         else:
+            if both_features:
+                what_new = "{}:{}-{}:{}".format(chr1, bs1, chr2, bs2)
             final_pairs.append((beg1, end1, beg2, end2, what, what_new))
 
-    return sorted(final_pairs)
+
+    return sorted(set(final_pairs))
 
 
 def submatrix_coordinates(final_pairs, wsp, submatrices, counter, both_features):
@@ -224,27 +230,37 @@ def readfiles(genomic_file, iter_pairs):
         fh1.close()
 
 
-def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins, both_features):
+def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins, window_size, both_features):
     def write_submatrices(X, Y, x, y, raw, nrm, group, what_new):
         c1, b1 = bins[X]
         c2, b2 = bins[Y]
         out.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
             c1, b1, c2, b2, x, y, raw, nrm, group, what_new))
+    
+    def write_submatrices_both(x, y, raw, nrm, what_new, window_size):
+        index = x + y*window_size # from 2D matrix coordinates to 1D array
+        out.write('{}\t{}\t{}\t{}\n'.format(what_new, index, raw, nrm))
 
     readfiles_iterator = readfiles(genomic_mat, iter_pairs)
     if both_features:
         if bins:
-            out = open(submatrices, 'w')
+            comp_submatrices_path = "{}.gz".format(submatrices)
+            out = gzip_open(comp_submatrices_path, 'wt')
+            old = ''
             for (X, Y), x, y, raw, nrm, group, what_new in readfiles_iterator:
                 groups['']['sum_raw'][x, y] += raw
                 groups['']['sqr_raw'][x, y] += raw**2
                 groups['']['sum_nrm'][x, y] += nrm
                 groups['']['sqr_nrm'][x, y] += nrm**2
                 groups['']['passage'][x, y] += 1
-                write_submatrices(X, Y, x, y, raw, round(nrm,3), group, what_new)
+                if what_new == old:
+                    write_submatrices_both(x, y, raw, round(nrm,3), '', window_size)
+                else:
+                    write_submatrices_both(x, y, raw, round(nrm,3), what_new, window_size)
+                    old = what_new
             out.close()
         else:
-            for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+            for (X, Y), x, y, raw, nrm, group, _ in readfiles_iterator:
                 groups['']['sum_raw'][x, y] += raw
                 groups['']['sqr_raw'][x, y] += raw**2
                 groups['']['sum_nrm'][x, y] += nrm
@@ -253,7 +269,7 @@ def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, b
     else:
         if bins:
             out = open(submatrices, 'w')
-            for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+            for (X, Y), x, y, raw, nrm, group, what_new in readfiles_iterator:
                 groups[group]['sum_raw'][x, y] += raw
                 groups[group]['sqr_raw'][x, y] += raw**2
                 groups[group]['sum_nrm'][x, y] += nrm
@@ -262,7 +278,7 @@ def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, b
                 write_submatrices(X, Y, x, y, raw, round(nrm,3), group, what_new)
             out.close()
         else:
-            for (X, Y), x, y, raw, nrm, group in readfiles_iterator:
+            for (X, Y), x, y, raw, nrm, group,_ in readfiles_iterator:
                 groups[group]['sum_raw'][x, y] += raw
                 groups[group]['sqr_raw'][x, y] += raw**2
                 groups[group]['sum_nrm'][x, y] += nrm
