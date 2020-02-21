@@ -3,3 +3,4 @@ builds
 *.egg-info
 __pycache__
 *.pyc
+.coverage

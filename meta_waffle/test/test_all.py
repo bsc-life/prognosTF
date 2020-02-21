@@ -17,6 +17,7 @@ from meta_waffle       import submatrix_coordinates, interactions_at_intersectio
 TEST_PATH = os_join(os_split(os_split(os_split(__file__)[0])[0])[0], 'test')
 RESOLUTION = 10000
 WINDOWS_SPAN = 4
+window_size = (WINDOWS_SPAN * 2) + 1
 (SECTION_POS, CHROM_SIZES, BINS, PEAK_COORD1, PEAK_COORD2,
  ITER_PAIRS, PAIR_PEAKS) = load(open(os_join(TEST_PATH, 'test_data.pickle'), 'rb'))
 
@@ -60,7 +61,8 @@ class TestWaffle(unittest.TestCase):
             badcols = Unpickler(fh).load()['badcol']
         fh.close()
         peak_coord1, peak_coord2, npeaks1, npeaks2, submatrices, coord_conv = parse_peaks(
-            peak_files, RESOLUTION, in_feature, CHROM_SIZES, badcols, SECTION_POS, WINDOWS_SPAN)
+            peak_files, RESOLUTION, in_feature, CHROM_SIZES, badcols, SECTION_POS, WINDOWS_SPAN, both_features=False)
+
         global COORD_CONV
         COORD_CONV = coord_conv
         global SUBMATRICES
@@ -77,7 +79,7 @@ class TestWaffle(unittest.TestCase):
         max_dist = float('inf')
         window = 'intra'
         pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2, RESOLUTION,
-                                    WINDOWS_SPAN, max_dist, window, COORD_CONV)
+                                    WINDOWS_SPAN, max_dist, window, COORD_CONV, both_features=False)
         self.assertEqual(pair_peaks, PAIR_PEAKS)
 
     def test_04_submatrix_coordinates(self):
@@ -93,7 +95,7 @@ class TestWaffle(unittest.TestCase):
         fh.close()
         counter = defaultdict(int)
         iter_pairs = submatrix_coordinates(PAIR_PEAKS, (WINDOWS_SPAN * 2) + 1,
-                                           SUBMATRICES, counter)
+                                           SUBMATRICES, counter, both_features=False)
         iter_pairs = [v for v in iter_pairs]
         # self.assertEqual(iter_pairs, ITER_PAIRS)
         self.assertEqual(counter[''], 33)
@@ -117,8 +119,7 @@ class TestWaffle(unittest.TestCase):
         }
 
         interactions_at_intersection(
-            groups, genomic_mat, (v for v in ITER_PAIRS), submatrices, '')
-
+            groups, genomic_mat, (v for v in ITER_PAIRS), submatrices, '',  window_size, both_features=False)
         self.assertEqual(groups, GROUPS)
 
     def test_06_windows(self):
@@ -137,9 +138,9 @@ class TestWaffle(unittest.TestCase):
         windows = [(0, 100), (100, 200), (200, 300), (300, 400)]
         for window in ['intra'] + windows:
             pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2, RESOLUTION,
-                                        WINDOWS_SPAN, max_dist, window, COORD_CONV)
+                                        WINDOWS_SPAN, max_dist, window, COORD_CONV, both_features=False)
             counter = defaultdict(int)
-            iter_pairs = submatrix_coordinates(pair_peaks, (WINDOWS_SPAN * 1000) + 1, SUBMATRICES, counter)
+            iter_pairs = submatrix_coordinates(pair_peaks, (WINDOWS_SPAN * 1000) + 1, SUBMATRICES, counter, both_features=False)
             genomic_mat = os_join(TEST_PATH, 'data', 'data_bam_10kb.tsv')
             submatrices = os_join(TEST_PATH, 'tmp.tsv')
 
@@ -154,7 +155,7 @@ class TestWaffle(unittest.TestCase):
             }
 
             interactions_at_intersection(groups[window], genomic_mat,
-                                         iter_pairs, submatrices, '')
+                                         iter_pairs, submatrices, '', window_size, both_features=False)
         self.assertEqual(sum(groups['intra']['']['sum_raw'].values()), 10705)
         self.assertEqual(sum(sum(groups[window]['']['sum_raw'].values())
                              for window in windows), 10705)
