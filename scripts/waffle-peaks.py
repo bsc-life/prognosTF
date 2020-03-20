@@ -133,7 +133,7 @@ def main():
                         'passage' : defaultdict(int)}
 
         if len(groups) > 1:
-            kgroups = groups.keys()
+            kgroups = list(groups.keys())
             groups = dict(((g1, g2), deepcopy(groups[g1]))
                           for i, g1 in enumerate(kgroups)
                           for g2 in kgroups[i:])
@@ -176,8 +176,8 @@ def main():
     if both_features:
         groups['']['counter']    = counter['']
         groups['']['resolution'] = resolution
-        groups['']['size']       = (windows_span * 2) + 1 
-    else:       
+        groups['']['size']       = (windows_span * 2) + 1
+    else:
         for group in groups:
             groups[group]['counter']    = counter[group]
             groups[group]['resolution'] = resolution
@@ -218,7 +218,7 @@ def get_options():
                         metavar='PATH', help='path to output file (pickle format)')
     parser.add_argument('--all_submatrices', dest='submatrix_path', default='',
                         metavar='PATH', help='''if PATH is provided here, stores
-                        all the individual submatrices generated''') 
+                        all the individual submatrices generated''')
     parser.add_argument('-s', dest='windows_span', required=True, type=int,
                         metavar='INT',
                         help='''Windows span around center of the peak (in bins; the
@@ -245,7 +245,7 @@ def get_options():
                         Together with --all_submatrices, it creates an average sub-matrices
                         for each pair of peaks and outputs a compress file ''')
     parser.add_argument('--silent', dest='silent', default=False,
-                        action='store_true', help='''shhhhhhttt''')                    
+                        action='store_true', help='''shhhhhhttt''')
 
     opts = parser.parse_args()
     return opts

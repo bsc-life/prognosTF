@@ -105,7 +105,7 @@ def rotate(li, x):
     return li[-x % len(li):] + li[:-x % len(li)]
 
 
-def plot_polar_waffle(matrix, size, divs=20000, resolution=1, axe=None):
+def plot_polar_waffle(matrix, size, divs=20000, resolution=1, axe=None, vmin=None, vmax=None):
     #get coordinates:
     Phi = []
     R = []
@@ -165,7 +165,7 @@ def plot_polar_waffle(matrix, size, divs=20000, resolution=1, axe=None):
 
     axr.set_title('Corrected by distance average submatrices between peaks', size=13)
     # axr = plt.subplot(211, polar=True)
-    m = axr.pcolormesh(Phi, R, data, linewidth=0)
+    m = axr.pcolormesh(Phi, R, data, linewidth=0, vmin=vmin, vmax=vmax)
     plt.colorbar(m, shrink=0.4, label='Averaged normalized interactions')
     yticks = np.asarray([0] + axr.get_yticks())
     axr.plot([-np.pi, 0, -np.pi / 2], [size, 0, size], 'k--', alpha=0.4, lw=1)

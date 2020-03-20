@@ -236,7 +236,7 @@ def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, b
         c2, b2 = bins[Y]
         out.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
             c1, b1, c2, b2, x, y, raw, nrm, group, what_new))
-    
+
     def write_submatrices_both(x, y, raw, nrm, what_new, window_size):
         index = x + y*window_size # from 2D matrix coordinates to 1D array
         out.write('{}\t{}\t{}\t{}\n'.format(what_new, index, raw, nrm))
