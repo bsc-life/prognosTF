@@ -157,7 +157,6 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
                 what_new = "{}:{}-{}:{}".format(chr1, bs1, chr2, bs2)
             final_pairs.append((beg1, end1, beg2, end2, what, what_new))
 
-
     return sorted(set(final_pairs))
 
 

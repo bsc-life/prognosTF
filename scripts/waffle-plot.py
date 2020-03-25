@@ -28,9 +28,17 @@ def main():
 
     waffle = load(open(waffle_file, 'rb'))
 
-    group = ''
+    if opts.group:
+        group = opts.group
+        if not group in waffle:
+            raise Exception('ERROR: {} not in waffle. Use one of:\n{}\n'.format(
+                group, '\n'.join(waffle.keys())
+            ))
+    else:
+        group = list(waffle.keys())[0]
 
-    plot_waffle(waffle[group], title, output)
+    plot_waffle(waffle[group], title, output=output,
+                metric='loop' if opts.do_loop else 'normal')
 
 
 def get_options():
@@ -41,7 +49,13 @@ def get_options():
     parser.add_argument('-o', '--output', dest='outfile', required=True,
                         metavar='PATH', help='''path to output image (any format
                         based on file extension)''')
-    parser.add_argument('--title', dest='title', default=None,
+    parser.add_argument('--loop', dest='do_loop', action='store_true',
+                        help='''correct for the formation of
+                        tight loops between peaks''')
+    parser.add_argument('--group', dest='group',
+                        metavar='STR', help='''Plot a given sub-group (default
+                        the first is shown)''')
+    parser.add_argument('--title', dest='title', default='',
                         metavar='STR', help='''some quoted text to be used as
                         title for the plot''')
 

@@ -112,7 +112,11 @@ def main():
             'sum_nrm' : defaultdict(float),
             'sqr_nrm' : defaultdict(float),
             'passage' : defaultdict(int)}
-
+        if len(groups) > 1:
+            kgroups = list(groups.keys())
+            groups = dict(((g1, g2), deepcopy(groups[g1]))
+                          for i, g1 in enumerate(kgroups)
+                          for g2 in kgroups[i:])
     else:
         for _, _, group in peak_coord1:
             groups[group] = {
@@ -131,12 +135,6 @@ def main():
                         'sum_nrm' : defaultdict(float),
                         'sqr_nrm' : defaultdict(float),
                         'passage' : defaultdict(int)}
-
-        if len(groups) > 1:
-            kgroups = list(groups.keys())
-            groups = dict(((g1, g2), deepcopy(groups[g1]))
-                          for i, g1 in enumerate(kgroups)
-                          for g2 in kgroups[i:])
 
 
     if not silent:
