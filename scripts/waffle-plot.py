@@ -22,9 +22,10 @@ def main():
 
     opts = get_options()
 
-    waffle_file = opts.peak_file
+    waffle_file = opts.infile
     output      = opts.outfile
     title       = opts.title
+    do_loop     = opts.do_loop
 
     waffle = load(open(waffle_file, 'rb'))
 
@@ -38,15 +39,15 @@ def main():
         group = list(waffle.keys())[0]
 
     plot_waffle(waffle[group], title, output=output,
-                metric='loop' if opts.do_loop else 'normal')
+                metric='loop' if do_loop else 'normal')
 
 
 def get_options():
     parser = ArgumentParser()
 
-    parser.add_argument('-i', '--input', dest='peak_file', required=True,
+    parser.add_argument('-i', dest='infile', required=True,
                         metavar='PATH', help='''path to input pickle file''')
-    parser.add_argument('-o', '--output', dest='outfile', required=True,
+    parser.add_argument('-o', dest='outfile', required=True,
                         metavar='PATH', help='''path to output image (any format
                         based on file extension)''')
     parser.add_argument('--loop', dest='do_loop', action='store_true',

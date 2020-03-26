@@ -303,6 +303,7 @@ def plot_correlation(spear, pval, x, y, p_x, p_y, z, confs, preds,
     axl.set_xticklabels(['{}'.format(nicer(t * resolution)) for t in yticks], rotation=90)
     axl.set_title('Interactions vs distances', size=12)
     axl.set_xlim((min(x) - abs(max(x)-min(x))*0.01, max(x) + abs(max(x)-min(x))*0.01))
+    axl.set_ylim((min(y) - abs(max(y)-min(y))*0.01, max(y) + abs(max(y)-min(y))*0.01))
     axl.grid()
 
 

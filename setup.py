@@ -6,6 +6,7 @@ setup(
     packages=find_packages(),
     scripts=['scripts/waffle-peaks.py',
              'scripts/waffle-plot.py',
+             'scripts/waffle-predict.py',
              'scripts/waffle-bam2count.py'],
     license='GPLv3'
 )

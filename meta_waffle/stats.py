@@ -13,6 +13,16 @@ except ImportError:
         pass
 
 
+def get_center(matrix, size, span=1):
+    """
+    returns the average interactionsin the center of the matrix
+    """
+    k = size // 2 + 1
+    l = size // 2 + 1
+    return sum(matrix[k + i][l + j] for i in range(-span, span + 1)
+               for j in range(-span, span + 1)) / (span * 2 + 1)**2
+
+
 def matrix_to_decay(matrix, size, metric='loop'):
     mid = size // 2
     xvals = []
