@@ -20,9 +20,9 @@ WINDOWS_SPAN = 4
 COORD_CONV = ''
 window_size = (WINDOWS_SPAN * 2) + 1
 (SECTION_POS, CHROM_SIZES, BINS, PEAK_COORD1, PEAK_COORD2,
- ITER_PAIRS, PAIR_PEAKS) = load(open(os_join(TEST_PATH, 'test_data.pickle'), 'rb'))
+ ITER_PAIRS, PAIR_PEAKS) = Unpickler(open(os_join(TEST_PATH, 'test_data.pickle'), 'rb')).load()
 
-GROUPS = load(open(os_join(TEST_PATH, 'test_result.pickle'), 'rb'))
+GROUPS = Unpickler(open(os_join(TEST_PATH, 'test_result.pickle'), 'rb')).load()
 
 
 # Popen('python {}/Simulate_HiC.py'.format(TEST_PATH), shell=True).communicate()
