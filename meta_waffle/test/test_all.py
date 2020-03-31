@@ -17,11 +17,12 @@ from meta_waffle       import submatrix_coordinates, interactions_at_intersectio
 TEST_PATH = os_join(os_split(os_split(os_split(__file__)[0])[0])[0], 'test')
 RESOLUTION = 10000
 WINDOWS_SPAN = 4
+COORD_CONV = ''
 window_size = (WINDOWS_SPAN * 2) + 1
 (SECTION_POS, CHROM_SIZES, BINS, PEAK_COORD1, PEAK_COORD2,
- ITER_PAIRS, PAIR_PEAKS) = load(open(os_join(TEST_PATH, 'test_data.pickle'), 'rb'))
+ ITER_PAIRS, PAIR_PEAKS) = Unpickler(open(os_join(TEST_PATH, 'test_data.pickle'), 'rb')).load()
 
-GROUPS = load(open(os_join(TEST_PATH, 'test_result.pickle'), 'rb'))
+GROUPS = Unpickler(open(os_join(TEST_PATH, 'test_result.pickle'), 'rb')).load()
 
 
 # Popen('python {}/Simulate_HiC.py'.format(TEST_PATH), shell=True).communicate()
@@ -61,7 +62,7 @@ class TestWaffle(unittest.TestCase):
             badcols = Unpickler(fh).load()['badcol']
         fh.close()
         peak_coord1, peak_coord2, npeaks1, npeaks2, submatrices, coord_conv = parse_peaks(
-            peak_files, RESOLUTION, in_feature, CHROM_SIZES, badcols, SECTION_POS, WINDOWS_SPAN, both_features=False)
+            peak_files[0], peak_files[1], RESOLUTION, in_feature, CHROM_SIZES, badcols, SECTION_POS, WINDOWS_SPAN, both_features=False)
 
         global COORD_CONV
         COORD_CONV = coord_conv
@@ -78,8 +79,8 @@ class TestWaffle(unittest.TestCase):
         """
         max_dist = float('inf')
         window = 'intra'
-        pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2, RESOLUTION,
-                                    WINDOWS_SPAN, max_dist, window, COORD_CONV, both_features=False)
+        pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2,
+                                    WINDOWS_SPAN, window, COORD_CONV, both_features=False)
         self.assertEqual(pair_peaks, PAIR_PEAKS)
 
     def test_04_submatrix_coordinates(self):
@@ -97,7 +98,7 @@ class TestWaffle(unittest.TestCase):
         iter_pairs = submatrix_coordinates(PAIR_PEAKS, (WINDOWS_SPAN * 2) + 1,
                                            SUBMATRICES, counter, both_features=False)
         iter_pairs = [v for v in iter_pairs]
-        # self.assertEqual(iter_pairs, ITER_PAIRS)
+        self.assertEqual(sorted(iter_pairs), sorted(ITER_PAIRS))
         self.assertEqual(counter[''], 33)
 
 
@@ -126,19 +127,19 @@ class TestWaffle(unittest.TestCase):
         """
         test if total intra chromsomal is the same as several windows
         """
-        max_dist = float('inf')
         biases = os_join(TEST_PATH, 'data', 'biases.pickle')
         fh = open(biases, "rb")
         try:
             badcols = Unpickler(fh, encoding='latin1').load()['badcol']
         except TypeError:
             badcols = Unpickler(fh).load()['badcol']
+        fh.close()
         window = 'intra'
         groups = {}
         windows = [(0, 100), (100, 200), (200, 300), (300, 400)]
         for window in ['intra'] + windows:
-            pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2, RESOLUTION,
-                                        WINDOWS_SPAN, max_dist, window, COORD_CONV, both_features=False)
+            pair_peaks = generate_pairs(PEAK_COORD1, PEAK_COORD2,
+                                        WINDOWS_SPAN, window, COORD_CONV, both_features=False)
             counter = defaultdict(int)
             iter_pairs = submatrix_coordinates(pair_peaks, (WINDOWS_SPAN * 1000) + 1, SUBMATRICES, counter, both_features=False)
             genomic_mat = os_join(TEST_PATH, 'data', 'data_bam_10kb.tsv')

@@ -1,0 +1,5 @@
+include test/*.pickle
+include test/data/*.bam*
+include test/data/*.pickle
+include test/data/*.bed
+include test/data/*.tsv

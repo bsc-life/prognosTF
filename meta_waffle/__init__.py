@@ -8,7 +8,7 @@ from heapq       import heappush, heappop, heappushpop
 from gzip        import open as gzip_open
 
 
-def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
+def parse_peaks(cpeaks1, cpeaks2, resolution, in_feature, chrom_sizes, badcols,
                 section_pos, windows_span, both_features):
 
     def read_line_feature(line):
@@ -32,11 +32,8 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
         c, p1, p2 = line.split()[:3]
         return c, (int(p1) + int(p2)) // 2 // resolution, '{}:{}-{}'.format(c, p1, p2)
 
-    peaks1 = open(peak_files[0], "r")
-    try:
-        peaks2 = open(peak_files[1], "r")
-    except IndexError:
-        peaks2 = peaks1
+    peaks1 = open(cpeaks1, "r")
+    peaks2 = open(cpeaks2, "r")
 
     # find out if bed file contain features, or only coordinates
     line = next(peaks1)
@@ -75,13 +72,13 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
 
     # sort peaks
     bin_coordinate1 = sorted(bin_coordinate1)
-    if len(peak_files) == 1:
+    if cpeaks1 == cpeaks2:
         bin_coordinate2 = bin_coordinate1
     else:
         bin_coordinate2 = sorted(bin_coordinate2)
 
     peaks1.close()
-    if len(peak_files) > 1:
+    if cpeaks1 != cpeaks2:
         peaks2.close()
 
     submatrices = {}
@@ -105,8 +102,8 @@ def parse_peaks(peak_files, resolution, in_feature, chrom_sizes, badcols,
     return bin_coordinate1, bin_coordinate2, npeaks1, npeaks2, submatrices, coord_conv
 
 
-def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
-                   max_dist, window, coord_conv, both_features):
+def generate_pairs(bin_coordinate1, bin_coordinate2, windows_span,
+                   window, coord_conv, both_features):
 
     wsp = (windows_span * 2) + 1
 
@@ -157,7 +154,6 @@ def generate_pairs(bin_coordinate1, bin_coordinate2, resolution, windows_span,
                 what_new = "{}:{}-{}:{}".format(chr1, bs1, chr2, bs2)
             final_pairs.append((beg1, end1, beg2, end2, what, what_new))
 
-
     return sorted(set(final_pairs))
 
 
@@ -203,31 +199,29 @@ def submatrix_coordinates(final_pairs, wsp, submatrices, counter, both_features)
 
 def readfiles(genomic_file, iter_pairs):
     # create empty meta-waffles
-    fh1 = open(genomic_file)
-    for line in fh1:
-        if not line.startswith('#'):
-            break
-    a, b, raw, nrm = line.split('\t')
-    pos1 = (int(a), int(b))
+    pos = 0
+    with open(genomic_file, 'r') as fh1:
+        for line in fh1:
+            if not line.startswith('#'):
+                break
+            pos += len(line)
+        fh1.seek(pos)
 
-    try:
-        pos2, x, y, group, what_new = next(iter_pairs)
-        while True:
-            if pos2 > pos1:
-                a, b, raw, nrm = next(fh1).split('\t')
+        try:
+            pos2, x, y, group, what_new = next(iter_pairs)
+            for line in fh1:
+                a, b, raw, nrm = line.split('\t')
                 pos1 = (int(a), int(b))
-            elif pos1 == pos2:
-                raw = int(raw)
-                nrm = float(nrm)
-                yield pos1, x, y, raw, nrm, group, what_new
-                pos2, x, y, group, what_new = next(iter_pairs)
-                if pos1 != pos2:  # some cells in the peak file are repeated
-                    a, b, raw, nrm = next(fh1).split('\t')
-                    pos1 = (int(a), int(b))
-            else:
-                pos2, x, y, group, what_new = next(iter_pairs)
-    except StopIteration:
-        fh1.close()
+                while pos2 <= pos1:
+                    if pos1 == pos2:
+                        yield pos1, x, y, int(raw), float(nrm), group, what_new
+                        pos2, x, y, group, what_new = next(iter_pairs)
+                        if pos1 != pos2:  # some cells in the peak file point to same genomic cell
+                            break
+                    else:
+                        pos2, x, y, group, what_new = next(iter_pairs)
+        except StopIteration:
+            pass
 
 
 def interactions_at_intersection(groups, genomic_mat, iter_pairs, submatrices, bins, window_size, both_features):
