@@ -98,7 +98,7 @@ class TestWaffle(unittest.TestCase):
         iter_pairs = submatrix_coordinates(PAIR_PEAKS, (WINDOWS_SPAN * 2) + 1,
                                            SUBMATRICES, counter, both_features=False)
         iter_pairs = [v for v in iter_pairs]
-        # self.assertEqual(iter_pairs, ITER_PAIRS)
+        self.assertEqual(sorted(iter_pairs), sorted(ITER_PAIRS))
         self.assertEqual(counter[''], 33)
 
 
@@ -127,13 +127,13 @@ class TestWaffle(unittest.TestCase):
         """
         test if total intra chromsomal is the same as several windows
         """
-        max_dist = float('inf')
         biases = os_join(TEST_PATH, 'data', 'biases.pickle')
         fh = open(biases, "rb")
         try:
             badcols = Unpickler(fh, encoding='latin1').load()['badcol']
         except TypeError:
             badcols = Unpickler(fh).load()['badcol']
+        fh.close()
         window = 'intra'
         groups = {}
         windows = [(0, 100), (100, 200), (200, 300), (300, 400)]
