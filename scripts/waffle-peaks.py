@@ -98,8 +98,13 @@ def main():
 
     # define pairs of peaks
     printime(' - Parsing peaks', silent)
+    try:
+        peaks1, peaks2 = peak_files
+    except IndexError:
+        peaks1 = peaks2 = peak_files[0]
+    printime(' - Parsing peaks', silent)
     peak_coord1, peak_coord2, npeaks1, npeaks2, submatrices, coord_conv = parse_peaks(
-        peak_files, resolution, in_feature, chrom_sizes, badcols, section_pos,
+        peaks1, peaks2, resolution, in_feature, chrom_sizes, badcols, section_pos,
         windows_span, both_features)
 
     # get the groups
@@ -149,8 +154,8 @@ def main():
             len(peak_coord2), npeaks2), silent)
 
     printime(' - Generating pairs of coordinates...', silent)
-    pair_peaks = generate_pairs(peak_coord1, peak_coord2, resolution,
-                                windows_span, max_dist, window, coord_conv, both_features)
+    pair_peaks = generate_pairs(peak_coord1, peak_coord2,
+                                windows_span, window, coord_conv, both_features)
 
     counter = defaultdict(int)
     printime('   - {:,} pairs'.format(len(pair_peaks)), silent)
