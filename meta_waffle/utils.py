@@ -1,13 +1,13 @@
 """
 """
 
+from __future__  import print_function
 import os
 import errno
 from datetime    import datetime
 from time        import time
 from collections import OrderedDict, defaultdict
 from pickle      import dump, load
-from __future__  import print_function
 
 try:
     from pysam       import AlignmentFile
