@@ -2,11 +2,6 @@
 """
 """
 from argparse    import ArgumentParser
-try:  # python 3
-    from pickle        import load, dump, HIGHEST_PROTOCOL, _Unpickler as Unpickler
-except ImportError:  # python 2
-    from pickle        import load, dump, HIGHEST_PROTOCOL, Unpickler
-
 from meta_waffle.utils import sum_groups
 
 
@@ -15,18 +10,20 @@ def main():
 
     waffle_files = opts.infiles
     output       = opts.outfile
+    verbose      = not opts.silent
 
-    waffle_tot = load(open(waffle_files[0], 'rb'))
-    seen_groups = set(k for k in waffle_tot)
-    dupl_groups = set()
-    for waffle_file in waffle_files[1:]:
-        waffle     = load(open(waffle_file, 'rb'))
-        for k in waffle:
-            if k in seen_groups:
-                dupl_groups.add(k)
-            else:
-                seen_groups.add(k)
-        sum_groups(waffle_tot, waffle)
+    missed, counter = sum_groups(waffle_files, output,
+                                 split_features=opts.split_features,
+                                 clean=opts.clean, verbose=verbose)
+
+    if verbose:
+        good = len(waffle_files) - len(missed)
+        print('Merged {:,} files out of {:,} (summing {:,} submatrices).'.format(
+            good, len(waffle_files), sum(counter.values())))
+        if missed:
+            print('\n  - Missed:')
+            for fnam in missed:
+                print('    . {}'.format(fnam))
 
 
 def get_options():
@@ -36,7 +33,12 @@ def get_options():
                         metavar='PATH', help='path to input files (pickle format)')
     parser.add_argument('-o', dest='outfile', required=True,
                         metavar='PATH', help='''path to output pickle file with
-                        the sum of all inputs''')
+                        the sum of all inputs. WARNING: should be a directory if
+                        "split-feature" is used''')
+    parser.add_argument('--split-features', dest='split_features', default=False,
+                        action='store_true', help='Generate one waffle per feature')
+    parser.add_argument('--clean', dest='clean', default=False,
+                        action='store_true', help='Remove input files')
     parser.add_argument('--silent', dest='silent', default=False,
                         action='store_true', help='''shhhhhhttt''')
 

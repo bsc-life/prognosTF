@@ -5,9 +5,9 @@ from subprocess import Popen
 from collections import defaultdict
 
 try:  # python 3
-    from pickle        import load, _Unpickler as Unpickler
+    from pickle        import _Unpickler as Unpickler
 except ImportError:  # python 2
-    from pickle        import load, Unpickler
+    from pickle        import Unpickler
 
 from meta_waffle.utils import chromosome_from_bam
 from meta_waffle       import parse_peaks, generate_pairs

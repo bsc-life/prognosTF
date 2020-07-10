@@ -8,9 +8,9 @@ from copy        import deepcopy
 
 from argparse    import ArgumentParser
 try:  # python 3
-    from pickle        import dump, HIGHEST_PROTOCOL, _Unpickler as Unpickler
+    from pickle        import dump, HIGHEST_PROTOCOL
 except ImportError:  # python 2
-    from pickle        import dump, HIGHEST_PROTOCOL, Unpickler
+    from pickle        import dump, HIGHEST_PROTOCOL
 
 try:
     from meta_waffle       import parse_peaks, generate_pairs

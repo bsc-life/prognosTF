@@ -2,12 +2,15 @@
 """
 """
 
-from argparse    import ArgumentParser
-from pickle import load
+from argparse          import ArgumentParser
+try:  # python 3
+    from pickle        import _Unpickler as Unpickler
+except ImportError:  # python 2
+    from pickle        import Unpickler
+
+from scipy.stats       import spearmanr
 
 from meta_waffle.stats import matrix_to_decay, get_center
-
-from scipy.stats import spearmanr
 
 
 def main():
@@ -18,7 +21,7 @@ def main():
     do_loop     = opts.do_loop
 
     out        = open(output, 'w')
-    waffle     = load(open(waffle_file, 'rb'))
+    waffle     = Unpickler(open(waffle_file, 'rb')).load()
     group      = list(waffle.keys())[0]
     size       = waffle[group]['size']
     for group, data in waffle.items():
