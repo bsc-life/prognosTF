@@ -8,13 +8,11 @@ from subprocess                      import Popen
 from multiprocessing                 import cpu_count
 from argparse                        import ArgumentParser
 from collections                     import OrderedDict
-from datetime                        import datetime
 from random                          import getrandbits
 
 from pytadbit.parsers.hic_bam_parser import get_biases_region, _iter_matrix_frags
 from pytadbit.parsers.hic_bam_parser import read_bam, filters_to_bin, printime
 from pytadbit.utils.file_handling    import mkdir
-from pytadbit.utils.extraviews       import nicer
 
 from pysam                           import AlignmentFile
 
@@ -22,7 +20,7 @@ from pysam                           import AlignmentFile
 def write_matrix(inbam, resolution, biases, outfile,
                  filter_exclude=(1, 2, 3, 4, 6, 7, 8, 9, 10),
                  region1=None, start1=None, end1=None, clean=True,
-                 region2=None, start2=None, end2=None,
+                 region2=None, start2=None, end2=None, nchunks=100,
                  tmpdir='.', ncpus=8, verbose=True, window=None):
 
     if not isinstance(filter_exclude, int):
@@ -32,7 +30,7 @@ def write_matrix(inbam, resolution, biases, outfile,
         inbam, filter_exclude, resolution, ncpus=ncpus,
         region1=region1, start1=start1, end1=end1,
         region2=region2, start2=start2, end2=end2,
-        tmpdir=tmpdir, verbose=verbose)
+        tmpdir=tmpdir, nchunks=nchunks, verbose=verbose)
 
     bamfile = AlignmentFile(inbam, 'rb')
     sections = OrderedDict(zip(bamfile.references,
@@ -127,7 +125,7 @@ def main():
             raise Exception('ERROR: beginning of window should be smaller '
                             'than end')
 
-    nheader = write_matrix(inbam, resolution, biases_file, outfile,
+    nheader = write_matrix(inbam, resolution, biases_file, outfile, nchunks=opts.nchunks,
                            ncpus=opts.ncpus, clean=opts.clean, window=window)
 
     rand_hash = "%016x" % getrandbits(64)
@@ -157,6 +155,8 @@ def get_options():
                         help='Keep temporary files for debugging')
     parser.add_argument('-C', dest='ncpus', default=cpu_count(),
                         type=int, help='Number of CPUs used to read BAM')
+    parser.add_argument('--nchunks', dest='nchunks', default=100,
+                        type=int, help='chunks in which to cut input bam file (default 100)')
     parser.add_argument('-w', '--window', dest='window', required=False,
                         default='all', metavar='INT-INT', type=str,
                         help='''[%(default)s] If only interested in some

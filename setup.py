@@ -8,6 +8,7 @@ setup(
     package_dir={'test': 'test'},
     package_data={'test': ['*.pickle', 'data/*.bam*', 'data/*.tsv', 'data/*.bed', 'data/*.pickle']},
     scripts=['scripts/waffle-peaks.py',
+             'scripts/waffle-merge.py',
              'scripts/waffle-plot.py',
              'scripts/waffle-predict.py',
              'scripts/waffle-bam2count.py'],

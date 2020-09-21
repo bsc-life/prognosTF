@@ -2,12 +2,15 @@
 """
 """
 
-from argparse    import ArgumentParser
-from pickle import load
+from argparse          import ArgumentParser
+try:  # python 3
+    from pickle        import _Unpickler as Unpickler
+except ImportError:  # python 2
+    from pickle        import Unpickler
+
+from scipy.stats       import spearmanr
 
 from meta_waffle.stats import matrix_to_decay, get_center
-
-from scipy.stats import spearmanr
 
 
 def main():
@@ -18,8 +21,11 @@ def main():
     do_loop     = opts.do_loop
 
     out        = open(output, 'w')
-    waffle     = load(open(waffle_file, 'rb'))
-    group      = list(waffle.keys())[0]
+    waffle     = Unpickler(open(waffle_file, 'rb')).load()
+    try:
+        group      = list(waffle.keys())[0]
+    except IndexError:
+        raise Exception('ERROR: nothing here.')
     size       = waffle[group]['size']
     for group, data in waffle.items():
         counter = data['counter']
@@ -30,6 +36,7 @@ def main():
             x, y = matrix_to_decay(matrix, size, metric='loop' if do_loop else 'normal')
             spear, pval = spearmanr(x, y)
         except ZeroDivisionError:
+            matrix  = [[0 for i in range(size)] for j in range(size)]
             spear = pval = float('nan')
         center = get_center(matrix, size)
         test = pval < 0.05 and spear > 0 and center > 1
