@@ -111,8 +111,6 @@ class TestWaffle(unittest.TestCase):
 
         groups = {
             '': {
-                'sum_raw' : defaultdict(int),
-                'sqr_raw' : defaultdict(int),
                 'sum_nrm' : defaultdict(float),
                 'sqr_nrm' : defaultdict(float),
                 'passage' : defaultdict(int)
@@ -121,7 +119,11 @@ class TestWaffle(unittest.TestCase):
 
         interactions_at_intersection(
             groups, genomic_mat, (v for v in ITER_PAIRS), submatrices, '',  window_size, both_features=False)
-        self.assertEqual(groups, GROUPS)
+        self.assertEqual(groups['']['passage'], GROUPS['']['passage'])
+        self.assertEqual([round(v, 5)for k, v in groups['']['sum_nrm']], 
+                         [round(v, 5)for k, v in GROUPS['']['sum_nrm']])
+        self.assertEqual([round(v, 5)for k, v in groups['']['sqr_nrm']], 
+                         [round(v, 5)for k, v in GROUPS['']['sqr_nrm']])
 
     def test_06_windows(self):
         """
@@ -157,9 +159,6 @@ class TestWaffle(unittest.TestCase):
 
             interactions_at_intersection(groups[window], genomic_mat,
                                          iter_pairs, submatrices, '', window_size, both_features=False)
-        self.assertEqual(sum(groups['intra']['']['sum_raw'].values()), 10705)
-        self.assertEqual(sum(sum(groups[window]['']['sum_raw'].values())
-                             for window in windows), 10705)
         self.assertEqual(round(sum(groups['intra']['']['sum_nrm'].values()), 5),
                          round(sum(sum(groups[window]['']['sum_nrm'].values())
                                    for window in windows), 5))
