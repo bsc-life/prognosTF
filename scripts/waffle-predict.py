@@ -22,7 +22,10 @@ def main():
 
     out        = open(output, 'w')
     waffle     = Unpickler(open(waffle_file, 'rb')).load()
-    group      = list(waffle.keys())[0]
+    try:
+        group      = list(waffle.keys())[0]
+    except IndexError:
+        raise Exception('ERROR: nothing here.')
     size       = waffle[group]['size']
     for group, data in waffle.items():
         counter = data['counter']
@@ -33,6 +36,7 @@ def main():
             x, y = matrix_to_decay(matrix, size, metric='loop' if do_loop else 'normal')
             spear, pval = spearmanr(x, y)
         except ZeroDivisionError:
+            matrix  = [[0 for i in range(size)] for j in range(size)]
             spear = pval = float('nan')
         center = get_center(matrix, size)
         test = pval < 0.05 and spear > 0 and center > 1

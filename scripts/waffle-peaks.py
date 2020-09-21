@@ -100,7 +100,7 @@ def main():
     printime(' - Parsing peaks', silent)
     try:
         peaks1, peaks2 = peak_files
-    except IndexError:
+    except ValueError:
         peaks1 = peaks2 = peak_files[0]
     printime(' - Parsing peaks', silent)
     peak_coord1, peak_coord2, npeaks1, npeaks2, submatrices, coord_conv = parse_peaks(
@@ -188,9 +188,28 @@ def main():
 
     printime(' - Finished extracting', silent)
 
-    out = open(outfile, 'wb')
-    dump(groups, out, protocol=HIGHEST_PROTOCOL)
-    out.close()
+    if opts.output_format == 'pickle':
+        out = open(outfile, 'wb')
+        dump(groups, out, protocol=HIGHEST_PROTOCOL)
+        out.close()
+    else:
+        out = open(outfile, 'w')
+        out.write('# Waffle-peak output file\n')
+        out.write('# >group name\tresolution\tsub-matrix size\tnumber of submatrices\n')
+        out.write('# Sum of normalized interactions\n')
+        out.write('# Sum of square normalized interactions\n')
+        for group in groups:
+            size = groups[group]['size']
+            out.write('>{}\t{}\t{}\t{}\n'.format(
+                group, groups[group]['resolution'], size, 
+                groups[group]['counter']))
+            out.write('{}\n'.format(
+                '\t'.join(str(round(groups[group]['sum_nrm'][i, j], 3)) 
+                          for i in range(size) for j in range(size))))
+            out.write('{}\n'.format(
+                '\t'.join(str(round(groups[group]['sqr_nrm'][i, j], 3)) 
+                          for i in range(size) for j in range(size))))
+        out.close()
 
     printime('all done!', silent)
 
@@ -218,7 +237,13 @@ def get_options():
     #                     metavar='INT', default=False, type=int,
     #                     help='wanted resolution from generated matrix')
     parser.add_argument('-o', '--outfile', dest='outfile', default='',
-                        metavar='PATH', help='path to output file (pickle format)')
+                        metavar='PATH', help='path to output file')
+    parser.add_argument('--output_format', default='tsv', choices=['tsv', 'pickle'],
+                        metavar='PATH', help='''path to output file (available
+                        formatsare: %(choices)s) in tsv format, parse matrix 
+                        like this: 
+                        zip([(i, j) for i in range(size) for j in range(size)], line.split())
+                        ''')
     parser.add_argument('--all_submatrices', dest='submatrix_path', default='',
                         metavar='PATH', help='''if PATH is provided here, stores
                         all the individual submatrices generated''')
