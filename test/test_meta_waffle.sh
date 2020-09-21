@@ -34,5 +34,12 @@ echo ""
 echo ""
 echo ""
 echo ""
+echo "all submatrices inter A vs B"
+python ../scripts/waffle-peaks.py --genomic_matrix data/data_bam_10kb.tsv --peaks data/peaks_protA.bed data/peaks_protB.bed -o tmp/tmp.pickle -s 5 -w inter --all_submatrices /tmp/allsub.tsv
+
+echo ""
+echo ""
+echo ""
+echo ""
 echo "metaplot intra A+B"
 python ../scripts/waffle-peaks.py --genomic_matrix data/data_bam_10kb.tsv --peaks data/peaks_prot.bed -o tmp/tmp.pickle -s 2 -w intra
