@@ -6,6 +6,7 @@
 from collections import defaultdict
 from heapq       import heappush, heappop, heappushpop
 from gzip        import open as gzip_open
+from os.path     import getsize
 
 
 def parse_peaks(cpeaks1, cpeaks2, resolution, in_feature, chrom_sizes, badcols,
@@ -197,6 +198,44 @@ def submatrix_coordinates(final_pairs, wsp, submatrices, counter, both_features)
         yield heappop(buf)
 
 
+def find_previous_line(fh_genome, wanted_pos):
+    """
+    Place the 'cursor' right before a given pair of genomic bins
+    
+    :param fh_genome: file handler with genome interactions positionned after
+       comments
+    :param wanted_pos: couple of coordinates wanted to find
+    """
+    prev_pos = fh_genome.tell()  # we start right after comments
+    post_pos = getsize(fh_genome.name)
+    temp_pos = post_pos // 2
+
+    def update_pos(p):
+        """
+        update cursor position, and returns corresponding genomic bins
+        """
+        fh_genome.seek(p)
+        _ = next(fh_genome)
+        return tuple(int(v) for v in next(fh_genome).split()[:2])
+
+    pos = update_pos(temp_pos)
+
+    for _ in range(50):  # hardly more than 30 steps (with > 3 bilion lines)
+        if pos > wanted_pos:
+            post_pos = temp_pos
+            temp_pos = (temp_pos + prev_pos) // 2
+            pos = update_pos(temp_pos)
+        elif pos < wanted_pos:
+            prev_pos = temp_pos
+            temp_pos = (post_pos + temp_pos) // 2
+            pos = update_pos(temp_pos)
+        else:
+            break
+    fh_genome.seek(prev_pos - 40) # rewind a bit in case we are in the matching line
+    next(fh_genome) # and place the cursor at the beginning of aline
+
+    
+
 def readfiles(genomic_file, iter_pairs):
     # create empty meta-waffles
     pos = 0
@@ -209,6 +248,7 @@ def readfiles(genomic_file, iter_pairs):
 
         try:
             pos2, x, y, group, what_new = next(iter_pairs)
+            find_previous_line(fh1, pos2) # place the cursor
             for line in fh1:
                 a, b, raw, nrm = line.split('\t')
                 pos1 = (int(a), int(b))
