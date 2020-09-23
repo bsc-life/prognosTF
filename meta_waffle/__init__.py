@@ -198,7 +198,7 @@ def submatrix_coordinates(final_pairs, wsp, submatrices, counter, both_features)
         yield heappop(buf)
 
 
-def find_previous_line(fh_genome, wanted_pos):
+def find_previous_line(fh_genome, wanted_pos, initial_position):
     """
     Place the 'cursor' right before a given pair of genomic bins
     
@@ -206,9 +206,9 @@ def find_previous_line(fh_genome, wanted_pos):
        comments
     :param wanted_pos: couple of coordinates wanted to find
     """
-    prev_pos = fh_genome.tell()  # we start right after comments
+    prev_pos = initial_position  # we start at least right after comments
     post_pos = getsize(fh_genome.name)
-    temp_pos = post_pos // 2
+    temp_pos = (prev_pos + post_pos) // 2
 
     def update_pos(p):
         """
@@ -220,21 +220,21 @@ def find_previous_line(fh_genome, wanted_pos):
 
     pos = update_pos(temp_pos)
 
-    for _ in range(50):  # hardly more than 30 steps (with > 3 bilion lines)
+    for _ in range(50):  # hardly more than 30 steps (with > 3 billion lines)
         if pos > wanted_pos:
             post_pos = temp_pos
-            temp_pos = (temp_pos + prev_pos) // 2
+            temp_pos = (prev_pos + temp_pos) // 2
             pos = update_pos(temp_pos)
         elif pos < wanted_pos:
             prev_pos = temp_pos
-            temp_pos = (post_pos + temp_pos) // 2
+            temp_pos = (temp_pos + post_pos) // 2
             pos = update_pos(temp_pos)
         else:
             break
-    fh_genome.seek(prev_pos - 40) # rewind a bit in case we are in the matching line
-    next(fh_genome) # and place the cursor at the beginning of aline
+    fh_genome.seek(prev_pos) # rewind a bit in case we are in the matching line
+    l = next(fh_genome) # and place the cursor at the beginning of aline
+    return prev_pos
 
-    
 
 def readfiles(genomic_file, iter_pairs):
     # create empty meta-waffles
@@ -248,11 +248,12 @@ def readfiles(genomic_file, iter_pairs):
 
         try:
             pos2, x, y, group, what_new = next(iter_pairs)
-            find_previous_line(fh1, pos2) # place the cursor
+            pos = find_previous_line(fh1, pos2, pos) # place the cursor
             for line in fh1:
+                pos += len(line)
                 a, b, raw, nrm = line.split('\t')
                 pos1 = (int(a), int(b))
-                while pos2 <= pos1:
+                while pos1 >= pos2:
                     if pos1 == pos2:
                         yield pos1, x, y, float(nrm), group, what_new
                         pos2, x, y, group, what_new = next(iter_pairs)
@@ -260,6 +261,9 @@ def readfiles(genomic_file, iter_pairs):
                             break
                     else:
                         pos2, x, y, group, what_new = next(iter_pairs)
+                else:
+                    if pos1[0] < pos2[0]:
+                        pos = find_previous_line(fh1, pos2, pos)
         except StopIteration:
             pass
 
