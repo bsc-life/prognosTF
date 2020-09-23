@@ -233,7 +233,7 @@ def find_previous_line(fh_genome, wanted_pos, initial_position):
             break
     fh_genome.seek(prev_pos) # rewind a bit in case we are in the matching line
     l = next(fh_genome) # and place the cursor at the beginning of aline
-    return prev_pos
+    return prev_pos + len(l)
 
 
 def readfiles(genomic_file, iter_pairs):
