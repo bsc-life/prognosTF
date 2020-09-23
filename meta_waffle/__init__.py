@@ -198,6 +198,16 @@ def submatrix_coordinates(final_pairs, wsp, submatrices, counter, both_features)
         yield heappop(buf)
 
 
+def _update_pos(fh_genome, p):
+    """
+    update cursor position, and returns corresponding genomic bins
+    """
+    fh_genome.seek(p)
+    _ = next(fh_genome)
+    a, b, _ = next(fh_genome).split(None, 2)
+    return (int(a), int(b))
+
+
 def find_previous_line(fh_genome, wanted_pos, initial_position):
     """
     Place the 'cursor' right before a given pair of genomic bins
@@ -210,27 +220,18 @@ def find_previous_line(fh_genome, wanted_pos, initial_position):
     post_pos = getsize(fh_genome.name)
     temp_pos = (prev_pos + post_pos) // 2
 
-    def update_pos(p):
-        """
-        update cursor position, and returns corresponding genomic bins
-        """
-        fh_genome.seek(p)
-        _ = next(fh_genome)
-        return tuple(int(v) for v in next(fh_genome).split()[:2])
-
-    pos = update_pos(temp_pos)
+    pos = _update_pos(fh_genome, temp_pos)
 
     for _ in range(50):  # hardly more than 30 steps (with > 3 billion lines)
         if pos > wanted_pos:
             post_pos = temp_pos
             temp_pos = (prev_pos + temp_pos) // 2
-            pos = update_pos(temp_pos)
         elif pos < wanted_pos:
             prev_pos = temp_pos
             temp_pos = (temp_pos + post_pos) // 2
-            pos = update_pos(temp_pos)
         else:
             break
+        pos = _update_pos(fh_genome, temp_pos)
     fh_genome.seek(prev_pos) # rewind a bit in case we are in the matching line
     l = next(fh_genome) # and place the cursor at the beginning of aline
     return prev_pos + len(l)
@@ -262,7 +263,7 @@ def readfiles(genomic_file, iter_pairs):
                     else:
                         pos2, x, y, group, what_new = next(iter_pairs)
                 else:
-                    if pos1[0] < pos2[0]:
+                    if pos1[0] < pos2[0]:  # relatively big gap
                         pos = find_previous_line(fh1, pos2, pos)
         except StopIteration:
             pass
